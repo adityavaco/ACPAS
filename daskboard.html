@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HR Portal</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary: #3a7bd5;
+            --secondary: #00d2ff;
+            --dark: #2c3e50;
+            --light: #f5f7fa;
+            --success: #4CAF50;
+            --warning: #FFC107;
+            --danger: #F44336;
+            --gray: #95a5a6;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        body {
+            background-color: var(--light);
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 250px;
+            background: linear-gradient(to bottom, var(--primary), var(--secondary));
+            color: white;
+            transition: all 0.3s;
+        }
+
+        .sidebar-header {
+            padding: 20px;
+            text-align: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .sidebar-header h2 {
+            font-size: 1.5rem;
+            margin-bottom: 10px;
+        }
+
+        .user-profile {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px 10px;
+        }
+
+        .profile-img {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 3px solid rgba(255, 255, 255, 0.2);
+            margin-bottom: 10px;
+        }
+
+        .user-name {
+            font-size: 1rem;
+            font-weight: 600;
+        }
+
+        .user-role {
+            font-size: 0.8rem;
+            opacity: 0.8;
+        }
+
+        .sidebar-menu {
+            padding: 0 10px;
+        }
+
+        .menu-item {
+            padding: 12px 15px;
+            margin-bottom: 5px;
+            border-radius: 5px;
+            transition: all 0.2s;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+        }
+
+        .menu-item:hover {
+            background-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .menu-item.active {
+            background-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .menu-item i {
+            margin-right: 10px;
+            font-size: 1.1rem;
+            width: 20px;
+            text-align: center;
+        }
+
+        .menu-text {
+            font-size: 0.9rem;
+        }
+
+        .main-content {
+            flex: 1;
+            padding: 20px;
+        }
+
+        .header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 30px;
+            padding-bottom: 15px;
+            border-bottom: 1px solid #eaeaea;
+        }
+
+        .page-title h1 {
+            font-size: 1.8rem;
+            color: var(--dark);
+        }
+
+        .notifications {
+            position: relative;
+        }
+
+        .notification-bell {
+            font-size: 1.3rem;
+            color: var(--dark);
+            cursor: pointer;
+        }
+
+        .notification-count {
+            position: absolute;
+            top: -5px;
+            right: -5px;
+            background-color: var(--danger);
+            color: white;
+            border-radius: 50%;
+            width: 18px;
+            height: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7rem;
+        }
+
+        .dashboard-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background-color: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+        }
+
+        .card-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .card-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-right: 15px;
+            font-size: 1.2rem;
+            color: white;
+        }
+
+        .card-icon.blue {
+            background-color: var(--primary);
+        }
+
+        .card-icon.green {
+            background-color: var(--success);
+        }
+
+        .card-icon.orange {
+            background-color: var(--warning);
+        }
+
+        .card-icon.red {
+            background-color: var(--danger);
+        }
+
+        .card-title h3 {
+            font-size: 1rem;
+            color: var(--gray);
+            margin-bottom: 3px;
+        }
+
+        .card-value {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--dark);
+        }
+
+        .card-footer {
+            margin-top: 15px;
+            font-size: 0.8rem;
+            color: var(--gray);
+            display: flex;
+            align-items: center;
+        }
+
+        .card-footer i {
+            margin-right: 5px;
+        }
+
+        .positive {
+            color: var(--success);
+        }
+
+        .negative {
+            color: var(--danger);
+        }
+
+        .activity-section {
+            background-color: white;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .section-title h2 {
+            font-size: 1.3rem;
+            color: var(--dark);
+        }
+
+        .view-all {
+            color: var(--primary);
+            font-size: 0.9rem;
+            cursor: pointer;
+        }
+
+        .activity-list {
+            list-style: none;
+        }
+
+        .activity-item {
+            display: flex;
+            align-items: center;
+            padding: 10px 0;
+            border-bottom: 1px solid #f0f0f0;
+        }
+
+        .activity-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            margin-right: 15px;
+            background-color: #f0f0f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--gray);
+            font-size: 1.1rem;
+        }
+
+        .activity-content {
+            flex: 1;
+        }
+
+        .activity-title {
+            font-weight: 600;
+            color: var(--dark);
+        }
+
+        .activity-desc {
+            font-size: 0.8rem;
+            color: var(--gray);
+            margin-top: 3px;
+        }
+
+        .activity-time {
+            font-size: 0.7rem;
+            color: var(--gray);
+        }
+
+        .settings-form {
+            background-color: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: var(--dark);
+        }
+
+        .form-control {
+            width: 100%;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 0.9rem;
+        }
+
+        .btn-save {
+            background-color: var(--primary);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                width: 80px;
+            }
+
+            .sidebar-header h2,
+            .menu-text,
+            .user-name,
+            .user-role {
+                display: none;
+            }
+
+            .user-profile {
+                padding: 10px;
+            }
+
+            .profile-img {
+                width: 50px;
+                height: 50px;
+            }
+
+            .menu-item {
+                justify-content: center;
+                padding: 15px;
+            }
+
+            .menu-item i {
+                margin-right: 0;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .dashboard-cards {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <div class="sidebar-header">
+            <h2>HR Portal</h2>
+        </div>
+        
+        <div class="user-profile">
+            <img src="https://storage.googleapis.com/workspace-0f70711f-8b4e-4d94-86f1-2a93ccde5887/image/5169f206-3c78-48fd-a9c0-2304b6a43df8.png" alt="Portrait of HR manager with professional attire" class="profile-img">
+            <span class="user-name">Sarah Johnson</span>
+            <span class="user-role">HR Manager</span>
+        </div>
+        
+        <div class="sidebar-menu">
+            <div class="menu-item active">
+                <i class="fas fa-user-plus"></i>
+                <span class="menu-text">Recruitment</span>
+            </div>
+            <div class="menu-item">
+                <i class="fas fa-user-tie"></i>
+                <span class="menu-text">Onboarding</span>
+            </div>
+            <div class="menu-item">
+                <i class="fas fa-user-minus"></i>
+                <span class="menu-text">Offboarding</span>
+            </div>
+            <div class="menu-item">
+                <i class="fas fa-chart-pie"></i>
+                <span class="menu-text">Analytics</span>
+            </div>
+            <div class="menu-item">
+                <i class="fas fa-cog"></i>
+                <span class="menu-text">Settings</span>
+            </div>
+        </div>
+    </div>
+    
+    <div class="main-content">
+        <div class="header">
+            <div class="page-title">
+                <h1>HR Portal</h1>
+            </div>
+            <div class="notifications">
+                <i class="fas fa-bell notification-bell"></i>
+                <span class="notification-count">3</span>
+            </div>
+        </div>
+        
+        <div class="dashboard-cards">
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon blue">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <div class="card-title">
+                        <h3>Total Employees</h3>
+                        <div class="card-value">245</div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <i class="fas fa-arrow-up positive"></i>
+                    <span class="positive">12% from last month</span>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon green">
+                        <i class="fas fa-user-plus"></i>
+                    </div>
+                    <div class="card-title">
+                        <h3>New Hires</h3>
+                        <div class="card-value">28</div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <i class="fas fa-arrow-up positive"></i>
+                    <span class="positive">8% from last month</span>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon orange">
+                        <i class="fas fa-user-clock"></i>
+                    </div>
+                    <div class="card-title">
+                        <h3>Pending Requests</h3>
+                        <div class="card-value">14</div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <i class="fas fa-arrow-down negative"></i>
+                    <span class="negative">3% from last month</span>
+                </div>
+            </div>
+            
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-icon red">
+                        <i class="fas fa-user-minus"></i>
+                    </div>
+                    <div class="card-title">
+                        <h3>Turnover Rate</h3>
+                        <div class="card-value">4.2%</div>
+                    </div>
+                </div>
+                <div class="card-footer">
+                    <i class="fas fa-arrow-down negative"></i>
+                    <span class="negative">1.5% from last quarter</span>
+                </div>
+            </div>
+        </div>
+        
+        <div class="activity-section">
+            <div class="section-header">
+                <div class="section-title">
+                    <h2>Recent Activities</h2>
+                </div>
+                <div class="view-all">View All</div>
+            </div>
+            
+            <ul class="activity-list">
+                <li class="activity-item">
+                    <div class="activity-avatar">
+                        <i class="fas fa-user-plus"></i>
+                    </div>
+                    <div class="activity-content">
+                        <div class="activity-title">New Employee Onboarded</div>
+                        <div class="activity-desc">Michael Brown joined the Marketing team</div>
+                    </div>
+                    <div class="activity-time">20 min ago</div>
+                </li>
+                
+                <li class="activity-item">
+                    <div class="activity-avatar">
+                        <i class="fas fa-paper-plane"></i>
+                    </div>
+                    <div class="activity-content">
+                        <div class="activity-title">Offer Letter Sent</div>
+                        <div class="activity-desc">Offer sent to Jessica Parker for UX Designer</div>
+                    </div>
+                    <div class="activity-time">1 hour ago</div>
+                </li>
+                
+                <li class="activity-item">
+                    <div class="activity-avatar">
+                        <i class="fas fa-calendar-check"></i>
+                    </div>
+                    <div class="activity-content">
+                        <div class="activity-title">Interview Scheduled</div>
+                        <div class="activity-desc">Technical interview with Alex Morgan tomorrow</div>
+                    </div>
+                    <div class="activity-time">3 hours ago</div>
+                </li>
+                
+                <li class="activity-item">
+                    <div class="activity-avatar">
+                        <i class="fas fa-user-graduate"></i>
+                    </div>
+                    <div class="activity-content">
+                        <div class="activity-title">Training Completed</div>
+                        <div class="activity-desc">Team completed DEI training session</div>
+                    </div>
+                    <div class="activity-time">Yesterday</div>
+                </li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        // Make menu items interactive and load default recruitment content
+        document.addEventListener('DOMContentLoaded', function() {
+            const menuItems = document.querySelectorAll('.menu-item');
+            
+            // Load recruitment content first by default
+            const pageTitle = document.querySelector('.page-title h1');
+            pageTitle.textContent = 'Recruitment Dashboard';
+            
+            const dashboardCards = document.querySelector('.dashboard-cards');
+            dashboardCards.innerHTML = `
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-icon blue">
+                            <i class="fas fa-bullhorn"></i>
+                        </div>
+                        <div class="card-title">
+                            <h3>Open Positions</h3>
+                            <div class="card-value">12</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-icon green">
+                            <i class="fas fa-file-alt"></i>
+                        </div>
+                        <div class="card-title">
+                            <h3>New Applications</h3>
+                            <div class="card-value">24</div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-header">
+                        <div class="card-icon orange">
+                            <i class="fas fa-calendar-alt"></i>
+                        </div>
+                        <div class="card-title">
+                            <h3>Upcoming Interviews</h3>
+                            <div class="card-value">8</div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            const activitySection = document.querySelector('.activity-section');
+            activitySection.querySelector('h2').textContent = 'Recruitment Pipeline';
+            activitySection.querySelector('ul').innerHTML = `
+                <li class="activity-item">
+                    <div class="activity-avatar">
+                        <i class="fas fa-search"></i>
+                    </div>
+                    <div class="activity-content">
+                        <div class="activity-title">Sourcing (8)</div>
+                    </div>
+                </li>
+                <li class="activity-item">
+                    <div class="activity-avatar">
+                        <i class="fas fa-phone"></i>
+                    </div>
+                    <div class="activity-content">
+                        <div class="activity-title">Screenings (5)</div>
+                    </div>
+                </li>
+                <li class="activity-item">
+                    <div class="activity-avatar">
+                        <i class="fas fa-users"></i>
+                    </div>
+                    <div class="activity-content">
+                        <div class="activity-title">Interviews (3)</div>
+                    </div>
+                </li>
+                <li class="activity-item">
+                    <div class="activity-avatar">
+                        <i class="fas fa-check"></i>
+                    </div>
+                    <div class="activity-content">
+                        <div class="activity-title">Offers (2)</div>
+                    </div>
+                </li>
+            `;
+            
+            menuItems.forEach(item => {
+                item.addEventListener('click', function() {
+                    document.querySelector('.menu-item.active').classList.remove('active');
+                    this.classList.add('active');
+                    
+                    // Update content based on selection
+                    const pageTitle = document.querySelector('.page-title h1');
+                    const dashboardCards = document.querySelector('.dashboard-cards');
+                    const activitySection = document.querySelector('.activity-section');
+                    const activitySectionTitle = activitySection.querySelector('h2');
+                    const activityList = activitySection.querySelector('ul');
+
+                    if (this.textContent.includes('Recruitment') || !this.textContent) {
+                        pageTitle.textContent = 'Recruitment Dashboard';
+                        dashboardCards.innerHTML = `
+                            <div class="card">
+                                <div class="card-header">
+                                    <div class="card-icon blue">
+                                        <i class="fas fa-bullhorn"></i>
+                                    </div>
+                                    <div class="card-title">
+                                        <h3>Open Positions</h3>
+                                        <div class="card-value">12</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="card">
+                                <div class="card-header">
+                                    <div class="card-icon green">
+                                        <i class="fas fa-file-alt"></i>
+                                    </div>
+                                    <div class="card-title">
+                                        <h3>New Applications</h3>
+                                        <div class="card-value">24</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="card">
+                                <div class="card-header">
+                                    <div class="card-icon orange">
+                                        <i class="fas fa-calendar-alt"></i>
+                                    </div>
+                                    <div class="card-title">
+                                        <h3>Upcoming Interviews</h3>
+                                        <div class="card-value">8</div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                        
+                        activitySectionTitle.textContent = 'Recruitment Pipeline';
+                        activityList.innerHTML = `
+                            <li class="activity-item">
+                                <div class="activity-avatar">
+                                    <i class="fas fa-search"></i>
+                                </div>
+                                <div class="activity-content">
+                                    <div class="activity-title">Sourcing (8)</div>
+                                </div>
+                            </li>
+                            <li class="activity-item">
+                                <div class="activity-avatar">
+                                    <i class="fas fa-phone"></i>
+                                </div>
+                                <div class="activity-content">
+                                    <div class="activity-title">Screenings (5)</div>
+                                </div>
+                            </li>
+                            <li class="activity-item">
+                                <div class="activity-avatar">
+                                    <i class="fas fa-users"></i>
+                                </div>
+                                <div class="activity-content">
+                                    <div class="activity-title">Interviews (3)</div>
+                                </div>
+                            </li>
+                            <li class="activity-item">
+                                <div class="activity-avatar">
+                                    <i class="fas fa-check"></i>
+                                </div>
+                                <div class="activity-content">
+                                    <div class="activity-title">Offers (2)</div>
+                                </div>
+                            </li>
+                        `;
+                    } else if (this.textContent.includes('Onboarding')) {
+                        pageTitle.textContent = 'Onboarding Management';
+                        dashboardCards.innerHTML = `
+                            <div class="card">
+                                <div class="card-header">
+                                    <div class="card-icon blue">
+                                        <i class="fas fa-user-tie"></i>
+                                    </div>
+                                    <div class="card-title">
+                                        <h3>New Hires Onboarded</h3>
+                                        <div class="card-value">15</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="card">
+                                <div class="card-header">
+                                    <div class="card-icon green">
+                                        <i class="fas fa-clipboard-check"></i>
+                                    </div>
+                                    <div class="card-title">
+                                        <h3>Tasks Completed</h3>
+                                        <div class="card-value">95%</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="card">
+                                <div class="card-header">
+                                    <div class="card-icon orange">
+                                        <i class="fas fa-hourglass-half"></i>
+                                    </div>
+                                    <div class="card-title">
+                                        <h3>Pending Onboarding</h3>
+                                        <div class="card-value">5</div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                        
+                        activitySectionTitle.textContent = 'Onboarding Checklist';
+                        activityList.innerHTML = `
+                            <li class="activity-item">
+                                <div class="activity-avatar">
+                                    <i class="fas fa-file-signature"></i>
+                                </div>
+                                <div class="activity-content">
+                                    <div class="activity-title">Contract Signing</div>
+                                    <div class="activity-desc">Pending for 2 new hires</div>
+                                </div>
+                                <div class="activity-time">Due Today</div>
+                            </li>
+                            <li class="activity-item">
+                                <div class="activity-avatar">
+                                    <i class="fas fa-laptop-code"></i>
+                                </div>
+                                <div class="activity-content">
+                                    <div class="activity-title">IT Setup</div>
+                                    <div class="activity-desc">Completed for 3 employees</div>
+                                </div>
+                                <div class="activity-time">Yesterday</div>
+                            </li>
+                            <li class="activity-item">
+                                <div class="activity-avatar">
+                                    <i class="fas fa-users-cog"></i>
+                                </div>
+                                <div class="activity-content">
+                                    <div class="activity-title">Team Introductions</div>
+                                    <div class="activity-desc">Scheduled for next Monday</div>
+                                </div>
+                                <div class="activity-time">Upcoming</div>
+                            </li>
+                        `;
+                    } else if (this.textContent.includes('Offboarding')) {
+                        pageTitle.textContent = 'Offboarding Management';
+                        dashboardCards.innerHTML = `
+                            <div class="card">
+                                <div class="card-header">
+                                    <div class="card-icon blue">
+                                        <i class="fas fa-user-minus"></i>
+                                    </div>
+                                    <div class="card-title">
+                                        <h3>Employees Offboarded</h3>
+                                        <div class="card-value">7</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="card">
+                                <div class="card-header">
+                                    <div class="card-icon green">
+                                        <i class="fas fa-handshake-slash"></i>
+                                    </div>
+                                    <div class="card-title">
+                                        <h3>Exit Interviews Done</h3>
+                                        <div class="card-value">5</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div class="card">
+                                <div class="card-header">
+                                    <div class="card-icon orange">
+                                        <i class="fas fa-clipboard-list"></i>
+                                    </div>
+                                    <div class="card-title">
+                                        <h3>Pending Clearances</h3>
+                                        <div class="card-value">2</div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                        
+                        activitySectionTitle.textContent = 'Offboarding Tasks';
+                        activityList.innerHTML = `
+                            <li class="activity-item">
+                                <div class="activity-avatar">
+                                    <i class="fas fa-key"></i>
+                                </div>
+                                <div class="activity-content">
+                                    <div class="activity-title">Asset Return</div>
+                                    <div class="activity-desc">Laptop and ID card from John Doe</div>
+                                </div>
+                                <div class="activity-time">Due Tomorrow</div>
+                            </li>
+                            <li class="activity-item">
+                                <div class="activity-avatar">
+                                    <i class="fas fa-comments"></i>
+                                </div>
+                                <div class="activity-content">
+                                    <div class="activity-title">Exit Interview</div>
+                                    <div class="activity-desc">Scheduled with Jane Smith</div>
+                                </div>
+                                <div class="activity-time">Next Week</div>
+                            </li>
+                            <li class="activity-item">
+                                <div class="activity-avatar">
+                                    <i class="fas fa-user-slash"></i>
+                                </div>
+                                <div class="activity-content">
+                                    <div class="activity-title">System Access Revoked</div>
+                                    <div class="activity-desc">For all recent offboardings</div>
+                                </div>
+                                <div class="activity-time">Completed</div>
+                            </li>
+                        `;
+                    }
+                    else if (this.textContent.includes('Analytics') || this.textContent.includes('Settings')) {
+                        pageTitle.textContent = this.textContent.trim();
+                        dashboardCards.innerHTML = `
+                            <div class="card">
+                                <div class="card-header">
+                                    <div class="card-icon blue">
+                                        <i class="fas fa-users"></i>
+                                    </div>
+                                    <div class="card-title">
+                                        <h3>Total Employees</h3>
+                                        <div class="card-value">245</div>
+                                    </div>
+                                </div>
+                                <div class="card-footer">
+                                    <i class="fas fa-arrow-up positive"></i>
+                                    <span class="positive">12% from last month</span>
+                                </div>
+                            </div>
+                            
+                            <div class="card">
+                                <div class="card-header">
+                                    <div class="card-icon green">
+                                        <i class="fas fa-user-plus"></i>
+                                    </div>
+                                    <div class="card-title">
+                                        <h3>New Hires</h3>
+                                        <div class="card-value">28</div>
+                                    </div>
+                                </div>
+                                <div class="card-footer">
+                                    <i class="fas fa-arrow-up positive"></i>
+                                    <span class="positive">8% from last month</span>
+                                </div>
+                            </div>
+                            
+                            <div class="card">
+                                <div class="card-header">
+                                    <div class="card-icon orange">
+                                        <i class="fas fa-user-clock"></i>
+                                    </div>
+                                    <div class="card-title">
+                                        <h3>Pending Requests</h3>
+                                        <div class="card-value">14</div>
+                                    </div>
+                                </div>
+                                <div class="card-footer">
+                                    <i class="fas fa-arrow-down negative"></i>
+                                    <span class="negative">3% from last month</span>
+                                </div>
+                            </div>
+                            
+                            <div class="card">
+                                <div class="card-header">
+                                    <div class="card-icon red">
+                                        <i class="fas fa-user-minus"></i>
+                                    </div>
+                                    <div class="card-title">
+                                        <h3>Turnover Rate</h3>
+                                        <div class="card-value">4.2%</div>
+                                    </div>
+                                </div>
+                                <div class="card-footer">
+                                    <i class="fas fa-arrow-down negative"></i>
+                                    <span class="negative">1.5% from last quarter</span>
+                                </div>
+                            </div>
+                        `;
+                        
+                        activitySectionTitle.textContent = 'Recent Activities';
+                        activityList.innerHTML = `
+                            <li class="activity-item">
+                                <div class="activity-avatar">
+                                    <i class="fas fa-user-plus"></i>
+                                </div>
+                                <div class="activity-content">
+                                    <div class="activity-title">New Employee Onboarded</div>
+                                    <div class="activity-desc">Michael Brown joined the Marketing team</div>
+                                </div>
+                                <div class="activity-time">20 min ago</div>
+                            </li>
+                            
+                            <li class="activity-item">
+                                <div class="activity-avatar">
+                                    <i class="fas fa-paper-plane"></i>
+                                </div>
+                                <div class="activity-content">
+                                    <div class="activity-title">Offer Letter Sent</div>
+                                    <div class="activity-desc">Offer sent to Jessica Parker for UX Designer</div>
+                                </div>
+                                <div class="activity-time">1 hour ago</div>
+                            </li>
+                            
+                            <li class="activity-item">
+                                <div class="activity-avatar">
+                                    <i class="fas fa-calendar-check"></i>
+                                </div>
+                                <div class="activity-content">
+                                    <div class="activity-title">Interview Scheduled</div>
+                                    <div class="activity-desc">Technical interview with Alex Morgan tomorrow</div>
+                                </div>
+                                <div class="activity-time">3 hours ago</div>
+                            </li>
+                            
+                            <li class="activity-item">
+                                <div class="activity-avatar">
+                                    <i class="fas fa-user-graduate"></i>
+                                </div>
+                                <div class="activity-content">
+                                    <div class="activity-title">Training Completed</div>
+                                    <div class="activity-desc">Team completed DEI training session</div>
+                                </div>
+                                <div class="activity-time">Yesterday</div>
+                            </li>
+                        `;
+                    }
+                });
+            });
+
+            // Notification bell toggle
+            const notificationBell = document.querySelector('.notification-bell');
+            notificationBell.addEventListener('click', function() {
+                alert('Notifications feature will be implemented soon!');
+            });
+
+            // View All functionality
+            const viewAllBtn = document.querySelector('.view-all');
+            viewAllBtn.addEventListener('click', function() {
+                alert('View all activities feature will be implemented soon!');
+            });
+        });
+    </script>
+</body>
+</html>

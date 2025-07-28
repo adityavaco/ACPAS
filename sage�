@@ -1,0 +1,12 @@
+user.emal=chaudhary.harshit@vacobinary.in
+user.name=harshit888200
+user.email=chaudhary.harshit@vacobinary.in
+core.repositoryformatversion=0
+core.filemode=true
+core.bare=false
+core.logallrefupdates=true
+remote.origin.url=https://github.com/soumyajitmaity132/CPAS.git
+remote.origin.fetch=+refs/heads/*:refs/remotes/origin/*
+branch.main.remote=origin
+branch.main.merge=refs/heads/main
+branch.main.vscode-merge-base=origin/main

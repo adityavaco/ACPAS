@@ -40,7 +40,9 @@ def get_candidates():
             "job_id" : candidate.job_id,
             "candidate_id": candidate.candidate_id,
             "candidate_name": candidate.candidate_name,
-            "interview_date": candidate.interview_date,
+            "l1_interview_date": candidate.L1_date,
+            "l2_interview_date": candidate.L2_date,
+            "hr_interview_date": candidate.hr_date,
             "manager_assigned": candidate.manager.full_name if candidate.manager else None
                  })
             
@@ -67,6 +69,7 @@ def interview_schedule():
     try:
         candidate_id = request.args.get('candidate_id')
         interview_datetime_str = request.args.get('interview_datetime')
+        round_type = request.args.get('round_type', None)
 
         # Check required parameters
         if not all([candidate_id, interview_datetime_str]):
@@ -96,7 +99,23 @@ def interview_schedule():
                     message="Candidate not found")
         
         # Update and commit
-        candidate.interview_date = interview_datetime
+        if round_type.upper() == "L1":
+            candidate.L1_date = interview_datetime
+
+
+        elif round_type.upper() == "L2":
+            candidate.L2_date = interview_datetime
+
+        elif round_type.upper() == "HR":
+            candidate.hr_date = interview_datetime
+
+        else:
+            return generic_json_response(
+                success = False,
+                status_code = 400,
+                message = "All interviews already scheduled."
+            )
+        
         db.session.commit()
         return generic_json_response(
                     success = True,
@@ -201,8 +220,38 @@ def managers_config():
 
 
 
-    
+@interview_bp.route("/candidate-reject" , methods = ["DELETE"] )
+def candidate_reject():
+    try:
+        candidate_id = request.args.get('candidate_id', None)
+        if not candidate_id:
+            return generic_json_response(
+                                     success=False,
+                                     status_code = 400,
+                                     message="Required parameters not provided.")
 
+        candidate = Candidate.query.get(candidate_id)
+        if not candidate:
+            return generic_json_response(
+                                     success=False,
+                                     status_code = 404,
+                                     message="Candidate not found.")
+        
+        # Deleting user after rejection
+        db.session.delete(candidate)
+        db.session.commit()
+        return generic_json_response(
+                                     success=True,
+                                     status_code = 200,
+                                     message="Candidate deleted successfully.")
+
+    except Exception as err:
+            return generic_json_response(
+                                     success=False,
+                                     status_code = 500,
+                                     message="Internal server error",
+                                     error= str(err) 
+                                     )
 
 
 

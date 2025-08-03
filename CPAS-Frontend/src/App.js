@@ -7,10 +7,11 @@ import Onboarding from './pages/Onboarding';
 import Offboarding from './pages/Offboarding';
 
 function App() {
+  const [reloadKey, setReloadKey] = React.useState(0);
   const handleLogout = () => {
-    // Add your logout logic here (e.g., clear tokens, redirect, etc.)
     alert('Logged out!');
   };
+  const handleReload = () => setReloadKey(k => k + 1);
 
   return (
     <Router>
@@ -25,11 +26,11 @@ function App() {
         </button>
       </nav>
       <div className="d-flex">
-        <Sidebar />
+        <Sidebar onReload={handleReload} />
         <div className="p-4 flex-grow-1">
           <Routes>
             <Route path="/" element={<Navigate to="/recruitment" />} />
-            <Route path="/recruitment" element={<HRDashboard />} />
+            <Route path="/recruitment" element={<HRDashboard reloadKey={reloadKey} />} />
             <Route path="/onboarding" element={<Onboarding />} />
             <Route path="/offboarding" element={<Offboarding />} />
           </Routes>

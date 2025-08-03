@@ -7,7 +7,7 @@ import { Link, useLocation } from 'react-router-dom';
 import Step1Upload from './Step1Upload';
 import { BsGridFill } from 'react-icons/bs';
 
-export default function Sidebar() {
+export default function Sidebar({ onReload }) {
   const location = useLocation();
 
   const linkClass = (path) =>
@@ -47,7 +47,7 @@ export default function Sidebar() {
         </li>
         {showRecruitmentDropdown && (
           <li className="nav-item" style={{ paddingLeft: 32 }}>
-            <Step1Upload />
+            <Step1Upload onReload={onReload} />
           </li>
         )}
         <li className="nav-item">

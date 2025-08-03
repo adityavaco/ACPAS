@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function Step1Upload({ onNext }) {
+export default function Step1Upload({ onNext, onReload }) {
   // Function to handle fetch-from-sheet POST request
   const handleFetchFromSheet = async () => {
     try {
@@ -12,15 +12,17 @@ export default function Step1Upload({ onNext }) {
       });
       const data = await response.json();
       console.log('Response from server:', data);
-      
       if (data.success) {
-        alert('Data fetched and inserted successfully!');
+        alert(data.message || 'Data fetched and inserted successfully!');
+        if (onReload) onReload();
         if (onNext) onNext();
       } else {
         alert('Failed: ' + (data.message || 'Unknown error'));
+        if (onReload) onReload(); // Still reload to reflect any changes
       }
     } catch (err) {
       alert('Error: ' + err.message);
+      if (onReload) onReload();
     }
   };
 

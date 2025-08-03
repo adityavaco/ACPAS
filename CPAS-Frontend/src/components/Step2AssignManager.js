@@ -1,11 +1,16 @@
 import React, { useState, useEffect } from 'react';
+import Modal from 'react-bootstrap/Modal';
+import Button from 'react-bootstrap/Button';
 
-export default function Step2AssignManager({ onNext, onPrev }) {
+export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
+  // Modal state
+  const [modal, setModal] = useState({ show: false, rowIdx: null, round: null, mode: 'schedule' });
+  const [modalDate, setModalDate] = useState('');
 
   // Always fetch fresh data from backend (don't rely on localStorage for candidate data)
-  useEffect(() => {
+  const fetchCandidates = () => {
     setLoading(true);
     fetch('http://localhost:5000/interviews/get-candidates')
       .then(res => res.json())
@@ -15,8 +20,13 @@ export default function Step2AssignManager({ onNext, onPrev }) {
             id: c.job_id,
             candid: c.candidate_id,
             name: c.candidate_name,
-            datetime: c.l1_interview_date || '', // Pre-fill if already scheduled
-            manager: c.manager_assigned || '' // Pre-fill if already assigned
+            l1_datetime: c.l1_interview_date || '',
+            l1_status: (c.l1_status || 'pending').toLowerCase(),
+            l2_datetime: c.l2_interview_date || '',
+            l2_status: (c.l2_status || 'not_available').toLowerCase(),
+            hr_datetime: c.hr_interview_date || '',
+            hr_status: (c.hr_status || 'not_available').toLowerCase(),
+            manager: c.manager_assigned || ''
           }));
           setData(mapped);
         } else {
@@ -29,114 +39,55 @@ export default function Step2AssignManager({ onNext, onPrev }) {
         setData([]);
         setLoading(false);
       });
-  }, []);
-
-  const handleDateTimeChange = (index, value) => {
-    const updated = [...data];
-    updated[index].datetime = value;
-    setData(updated);
   };
 
-  const handleManagerChange = (index, value) => {
-    const updated = [...data];
-    updated[index].manager = value;
-    setData(updated);
-  };
+  useEffect(() => {
+    fetchCandidates();
+  }, [reloadKey]);
 
-  const handleRejectCandidate = async (candidateId, index) => {
-    if (window.confirm('Are you sure you want to reject this candidate?')) {
-      try {
-        const response = await fetch(`http://localhost:5000/interviews/candidate-reject?candidate_id=${candidateId}`, {
-          method: 'DELETE'
-        });
-        const result = await response.json();
-        
-        if (result.success) {
-          // Remove from local state
-          const updated = data.filter((_, i) => i !== index);
-          setData(updated);
-          alert('Candidate rejected successfully');
-        } else {
-          alert('Failed to reject candidate: ' + result.message);
-        }
-      } catch (err) {
-        alert('Error rejecting candidate: ' + err.message);
-      }
+  // Modal open/close helpers
+  const openModal = (rowIdx, round, mode = 'schedule') => {
+    setModal({ show: true, rowIdx, round, mode });
+    if (mode === 'schedule') {
+      setModalDate(data[rowIdx][`${round}_datetime`] || '');
+    }
+  };
+  const closeModal = () => setModal({ show: false, rowIdx: null, round: null, mode: 'schedule' });
+
+
+  // Manager assignment handler
+  const handleManagerChange = async (index, value) => {
+    const row = data[index];
+    // Save to backend
+    const response = await fetch(`http://localhost:5000/interviews/assign-manager?candidate_id=${row.candid}&manager=${value}`, { method: 'PATCH' });
+    const result = await response.json();
+    if (result.success) {
+      // Update local state
+      setData(prev => prev.map((r, i) => i === index ? { ...r, manager: value } : r));
+    } else {
+      alert('Failed to assign manager: ' + result.message);
     }
   };
 
-  const handleScheduleInterview = async (candidateId, datetime, roundType = 'L1') => {
-    try {
-      // Convert datetime-local format (2025-01-15T14:30) to backend format (2025-01-15 14:30)
-      const formattedDatetime = datetime.replace('T', ' ');
-      
-      const response = await fetch(`http://localhost:5000/interviews/interview-schedule?candidate_id=${candidateId}&interview_datetime=${formattedDatetime}&round_type=${roundType}`, {
-        method: 'PATCH'
-      });
-      const result = await response.json();
-      
-      if (!result.success) {
-        alert('Failed to schedule interview: ' + result.message);
-        return false;
-      }
-      return true;
-    } catch (err) {
-      alert('Error scheduling interview: ' + err.message);
-      return false;
+  // Reject candidate handler
+  const handleRejectCandidate = async (candid, index) => {
+    if (!window.confirm('Are you sure you want to reject this candidate?')) return;
+    const response = await fetch(`http://localhost:5000/interviews/candidate-reject?candidate_id=${candid}`, { method: 'DELETE' });
+    const result = await response.json();
+    if (result.success) {
+      setData(prev => prev.filter((r, i) => i !== index));
+    } else {
+      alert('Failed to reject candidate: ' + result.message);
     }
   };
 
-  const handleAssignManager = async (candidateId, managerId) => {
-    try {
-      const response = await fetch('http://localhost:5000/interviews/managers', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          candidate_id: candidateId,
-          manager_id: managerId
-        })
-      });
-      const result = await response.json();
-      
-      if (!result.success) {
-        alert('Failed to assign manager: ' + result.message);
-        return false;
-      }
-      return true;
-    } catch (err) {
-      alert('Error assigning manager: ' + err.message);
-      return false;
-    }
-  };
-
-  const handleNext = async () => {
-    // Process all rows with datetime and manager assigned
-    const updates = data.filter(row => row.datetime && row.manager);
-    
-    if (updates.length === 0) {
-      alert('Please schedule interviews and assign managers before proceeding');
-      return;
-    }
-
-    try {
-      // Schedule interviews and assign managers
-      for (const row of updates) {
-        // Schedule interview
-        const interviewScheduled = await handleScheduleInterview(row.candid, row.datetime);
-        if (!interviewScheduled) return;
-
-        // Assign manager
-        const managerAssigned = await handleAssignManager(row.candid, row.manager);
-        if (!managerAssigned) return;
-      }
-
-      alert('All updates saved successfully!');
-      if (onNext) onNext();
-    } catch (err) {
-      alert('Error processing updates: ' + err.message);
-    }
+  // Helper for tab color
+  const getTabClass = (status, datetime) => {
+    if (!datetime) return 'btn-outline-secondary'; // default if not scheduled
+    if (status === 'pending') return 'bg-warning text-dark';
+    if (status === 'accepted') return 'bg-success text-white';
+    if (status === 'rejected') return 'bg-danger text-white';
+    return 'bg-secondary text-white';
   };
 
   if (loading) {
@@ -169,16 +120,38 @@ export default function Step2AssignManager({ onNext, onPrev }) {
                 <td>{row.id}</td>
                 <td>{row.name}</td>
                 <td>
-                  <input
-                    type="datetime-local"
-                    className="form-control"
-                    value={row.datetime}
-                    onChange={(e) => handleDateTimeChange(index, e.target.value)}
-                  />
-                  {row.datetime && (
-                    <div className="mt-2 text-primary">
-                      <small>Selected: {new Date(row.datetime).toLocaleString()}</small>
-                    </div>
+                  {/* Tabs for L1, L2, HR */}
+                  <div className="d-flex gap-2 mb-2">
+                    <button
+                      className={`btn btn-sm ${getTabClass(row.l1_status, row.l1_datetime)}`}
+                      onClick={() => openModal(index, 'l1', row.l1_datetime ? 'status' : 'schedule')}
+                    >
+                      L1
+                    </button>
+                    <button
+                      className={`btn btn-sm ${getTabClass(row.l2_status, row.l2_datetime)}`}
+                      disabled={row.l1_status !== 'accepted'}
+                      onClick={row.l1_status === 'accepted' ? () => openModal(index, 'l2', row.l2_datetime ? 'status' : 'schedule') : undefined}
+                    >
+                      L2
+                    </button>
+                    <button
+                      className={`btn btn-sm ${getTabClass(row.hr_status, row.hr_datetime)}`}
+                      disabled={row.l2_status !== 'accepted'}
+                      onClick={row.l2_status === 'accepted' ? () => openModal(index, 'hr', row.hr_datetime ? 'status' : 'schedule') : undefined}
+                    >
+                      HR
+                    </button>
+                  </div>
+                  {/* Show scheduled date/time for each round */}
+                  {row.l1_datetime && (
+                    <div className="mb-1"><small>L1: {new Date(row.l1_datetime).toLocaleString()}</small></div>
+                  )}
+                  {row.l2_datetime && (
+                    <div className="mb-1"><small>L2: {new Date(row.l2_datetime).toLocaleString()}</small></div>
+                  )}
+                  {row.hr_datetime && (
+                    <div className="mb-1"><small>HR: {new Date(row.hr_datetime).toLocaleString()}</small></div>
                   )}
                 </td>
                 <td>
@@ -199,7 +172,7 @@ export default function Step2AssignManager({ onNext, onPrev }) {
                   )}
                 </td>
                 <td>
-                  <button 
+                  <button
                     className="btn btn-outline-danger"
                     onClick={() => handleRejectCandidate(row.candid, index)}
                   >
@@ -212,18 +185,138 @@ export default function Step2AssignManager({ onNext, onPrev }) {
         </table>
       )}
 
-      <div className="d-flex justify-content-between mt-3">
-        <button className="btn btn-secondary" onClick={onPrev}>
-          Previous
-        </button>
-        <button 
-          className="btn btn-success" 
-          onClick={handleNext}
-          disabled={data.length === 0}
-        >
-          Next Page
-        </button>
-      </div>
+      {/* Modal for scheduling/status for any round (L1, L2, HR) */}
+      <Modal show={modal.show} onHide={closeModal} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>
+            {modal.round ? `${modal.round.toUpperCase()} Interview` : 'Interview'}
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <div>
+            <label className="form-label">Select Date & Time</label>
+            <input
+              type="datetime-local"
+              className="form-control mb-3"
+              value={modalDate}
+              onChange={e => setModalDate(e.target.value)}
+            />
+            <div className="d-flex gap-2 mb-3">
+              <Button
+                variant="primary"
+                onClick={async () => {
+                  const row = data[modal.rowIdx];
+                  const formattedDatetime = modalDate.replace('T', ' ');
+                  const response = await fetch('http://localhost:5000/interviews/interview-schedule', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      candidate_id: row.candid,
+                      interview_datetime: formattedDatetime,
+                      round_type: modal.round ? modal.round.toUpperCase() : 'L1'
+                    })
+                  });
+                  const result = await response.json();
+                  if (result.success) {
+                    fetchCandidates();
+                    closeModal();
+                  } else {
+                    alert('Failed to schedule: ' + result.message);
+                  }
+                }}
+                disabled={!modalDate}
+              >
+                Save
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={async () => {
+                  const row = data[modal.rowIdx];
+                  // Backend endpoint to reset interview round (date and status)
+                  const response = await fetch('http://localhost:5000/interviews/interview-schedule', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      candidate_id: row.candid,
+                      interview_datetime: null,
+                      round_type: modal.round ? modal.round.toUpperCase() : 'L1',
+                      reset: true
+                    })
+                  });
+                  const result = await response.json();
+                  if (result.success) {
+                    fetchCandidates();
+                    setModalDate('');
+                    closeModal();
+                  } else {
+                    alert('Failed to reset: ' + result.message);
+                  }
+                }}
+              >Reset</Button>
+              <Button
+                variant="success"
+                onClick={async () => {
+                  const row = data[modal.rowIdx];
+                  const response = await fetch('http://localhost:5000/interviews/candidate-stage', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      candidate_id: row.candid,
+                      stage: modal.round ? modal.round.toUpperCase() : 'L1',
+                      feedback: 'Accepted',
+                      status: 'ACCEPTED'
+                    })
+                  });
+                  const result = await response.json();
+                  if (result.success) {
+                    fetchCandidates();
+                    closeModal();
+                  } else {
+                    alert('Failed to update status: ' + result.message);
+                  }
+                }}
+                disabled={!data[modal.rowIdx]?.[`${modal.round}_datetime`]}
+              >Accept</Button>
+              <Button
+                variant="danger"
+                onClick={async () => {
+                  const row = data[modal.rowIdx];
+                  const response = await fetch('http://localhost:5000/interviews/candidate-stage', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      candidate_id: row.candid,
+                      stage: modal.round ? modal.round.toUpperCase() : 'L1',
+                      feedback: 'Rejected',
+                      status: 'REJECTED'
+                    })
+                  });
+                  const result = await response.json();
+                  if (result.success) {
+                    fetchCandidates();
+                    closeModal();
+                  } else {
+                    alert('Failed to update status: ' + result.message);
+                  }
+                }}
+                disabled={!data[modal.rowIdx]?.[`${modal.round}_datetime`]}
+              >Reject</Button>
+            </div>
+            <div className="mb-2">
+              Status: <span className={
+                data[modal.rowIdx]?.[`${modal.round}_status`] === 'accepted' ? 'text-success' :
+                data[modal.rowIdx]?.[`${modal.round}_status`] === 'rejected' ? 'text-danger' : 'text-warning'
+              }>
+                {data[modal.rowIdx]?.[`${modal.round}_status`] ? data[modal.rowIdx][`${modal.round}_status`].toUpperCase() : 'NOT AVAILABLE'}
+              </span>
+            </div>
+            <div className="mb-2">
+              Interview Date: <b>{data[modal.rowIdx]?.[`${modal.round}_datetime`] ? new Date(data[modal.rowIdx][`${modal.round}_datetime`]).toLocaleString() : 'Not set'}</b>
+            </div>
+          </div>
+        </Modal.Body>
+      </Modal>
     </div>
   );
+  // ...existing code...
 }

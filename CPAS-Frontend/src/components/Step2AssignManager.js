@@ -50,28 +50,13 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
   }, [reloadKey]);
 
   // Modal open/close helpers
-  const openModal = async (rowIdx, round, mode = 'schedule') => {
+  const openModal = (rowIdx, round, mode = 'schedule') => {
     setModal({ show: true, rowIdx, round, mode });
     if (mode === 'schedule') {
       setModalDate(data[rowIdx][`${round}_datetime`] || '');
     }
-    // Always fetch the latest interview_link from backend for this candidate
-    const candid = data[rowIdx]?.candid;
-    if (candid) {
-      try {
-        const res = await fetch(`http://localhost:5000/interviews/get-candidates?candidate_id=${candid}`);
-        const result = await res.json();
-        if (result.success && Array.isArray(result.data) && result.data.length > 0) {
-          setModalMeetLink(result.data[0].interview_link || '');
-        } else {
-          setModalMeetLink(data[rowIdx]?.interview_link || '');
-        }
-      } catch (e) {
-        setModalMeetLink(data[rowIdx]?.interview_link || '');
-      }
-    } else {
-      setModalMeetLink('');
-    }
+    // Always set the meet link field to the current value from data (even if modalMeetLink was changed previously)
+    setModalMeetLink(data[rowIdx]?.interview_link || '');
   };
   const closeModal = () => {
     setModal({ show: false, rowIdx: null, round: null, mode: 'schedule' });
@@ -79,17 +64,28 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
   };
 
 
-  // Manager assignment handler
+  // Manager assignment handler (uses POST to /interviews/managers)
+  const managerOptions = [
+    { value: 'manager_raj', label: 'Raj Kumar' },
+    { value: 'manager_sneha', label: 'Sneha Kapoor' },
+    { value: 'manager_arjun', label: 'Arjun Verma' }
+  ];
+
+  // Save the manager value directly to the db for the candidate (PATCH)
   const handleManagerChange = async (index, value) => {
     const row = data[index];
-    // Save to backend
-    const response = await fetch(`http://localhost:5000/interviews/assign-manager?candidate_id=${row.candid}&manager=${value}`, { method: 'PATCH' });
-    const result = await response.json();
-    if (result.success) {
-      // Update local state
-      setData(prev => prev.map((r, i) => i === index ? { ...r, manager: value } : r));
-    } else {
-      alert('Failed to assign manager: ' + result.message);
+    try {
+      const response = await fetch(`http://localhost:5000/interviews/assign-manager?candidate_id=${row.candid}&manager=${value}`, {
+        method: 'PATCH'
+      });
+      const result = await response.json();
+      if (result.success) {
+        setData(prev => prev.map((r, i) => i === index ? { ...r, manager: value } : r));
+      } else {
+        alert('Failed to assign manager: ' + result.message);
+      }
+    } catch (err) {
+      alert('Failed to assign manager: ' + err.message);
     }
   };
 
@@ -179,20 +175,12 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
                   )}
                 </td>
                 <td>
-                  <select
-                    className="form-select"
-                    value={row.manager}
-                    onChange={(e) => handleManagerChange(index, e.target.value)}
-                  >
-                    <option value="">Select Manager</option>
-                    <option value="manager_raj">Raj Kumar</option>
-                    <option value="manager_sneha">Sneha Kapoor</option>
-                    <option value="manager_arjun">Arjun Verma</option>
-                  </select>
-                  {row.manager && (
-                    <div className="mt-2 text-success">
-                      <small>Selected: {row.manager.replace('manager_', '').replace(/_/g, ' ')}</small>
+                  {row.manager ? (
+                    <div className="text-success">
+                      <small>{row.manager}</small>
                     </div>
+                  ) : (
+                    <span className="text-muted">No manager assigned</span>
                   )}
                 </td>
                 <td>
@@ -225,13 +213,32 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
               value={modalDate}
               onChange={e => setModalDate(e.target.value)}
             />
+            {/* Assign Manager dropdown inside modal */}
+            <div className="mb-3">
+              <label className="form-label">Assign Manager</label>
+              <select
+                className="form-select"
+                value={data[modal.rowIdx]?.manager || ''}
+                onChange={e => handleManagerChange(modal.rowIdx, e.target.value)}
+              >
+                <option value="">Select Manager</option>
+                {managerOptions.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+              {data[modal.rowIdx]?.manager && (
+                <div className="mt-2 text-success">
+                  <small>Selected: {data[modal.rowIdx].manager.replace('manager_', '').replace(/_/g, ' ')}</small>
+                </div>
+              )}
+            </div>
             {/* Generate Meet Link field and button side by side */}
             <div className="mb-3 d-flex align-items-center gap-2">
               <input
                 type="text"
                 className="form-control"
                 style={{ flex: 1 }}
-                value={modalMeetLink}
+                value={data[modal.rowIdx]?.interview_link || ''}
                 readOnly
                 placeholder="Meet link will appear here"
               />

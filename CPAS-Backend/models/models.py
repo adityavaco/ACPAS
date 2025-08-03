@@ -42,6 +42,7 @@ class Candidate(db.Model):
     job_id = db.Column(db.String, nullable=False)
     manager_id = db.Column(db.Integer, db.ForeignKey('employee.id_user'))
     job_role = db.Column(db.String)
+    manager_assigned = db.Column(db.String)  # Stores the assigned manager string (e.g., 'manager_raj')
     interview_link = db.Column(db.String)
     l1_panel = db.Column(db.String) #sare members yha ane chahiye jb manager select krega is_panel jb 1 ya true hoga tb
     l1_date = db.Column(db.DateTime)

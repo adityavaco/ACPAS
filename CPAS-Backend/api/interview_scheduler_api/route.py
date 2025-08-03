@@ -58,7 +58,8 @@ def get_candidates():
                 "l2_status": candidate.l2_status,
                 "hr_interview_date": candidate.hr_date,
                 "hr_status": candidate.hr_status,
-                "manager_assigned": candidate.manager.full_name if candidate.manager else None
+                "manager_assigned": candidate.manager_assigned,
+                "interview_link": candidate.interview_link
             })
             
         return generic_json_response(
@@ -76,6 +77,20 @@ def get_candidates():
                                      message="Internal server error",
                                      error= str(err) 
                                      )
+
+
+@interview_bp.route('/assign-manager', methods=['PATCH'])
+def assign_manager():
+    candidate_id = request.args.get('candidate_id')
+    manager = request.args.get('manager')
+    if not candidate_id or not manager:
+        return generic_json_response(success=False, status_code=400, message='candidate_id and manager are required')
+    candidate = Candidate.query.get(candidate_id)
+    if not candidate:
+        return generic_json_response(success=False, status_code=404, message='Candidate not found')
+    candidate.manager_assigned = manager
+    db.session.commit()
+    return generic_json_response(success=True, status_code=200, message='Manager assigned successfully.')
 
 
 
@@ -124,11 +139,13 @@ def interview_schedule():
                     status_code=400,
                     message="Invalid interview round type."
                 )
+            # Also clear the interview link when resetting any round
+            candidate.interview_link = None
             db.session.commit()
             return generic_json_response(
                 success=True,
                 status_code=200,
-                message=f"{round_type} interview round reset successfully."
+                message=f"{round_type} interview round reset successfully and meet link cleared."
             )
 
         # If not reset, proceed as before

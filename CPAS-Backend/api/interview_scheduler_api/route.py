@@ -49,14 +49,17 @@ def get_candidates():
         
         for candidate in candidates:
             result.append({
-            "job_id" : candidate.job_id,
-            "candidate_id": candidate.candidate_id,
-            "candidate_name": candidate.candidate_name,
-            "l1_interview_date": candidate.l1_date,
-            "l2_interview_date": candidate.l2_date,
-            "hr_interview_date": candidate.hr_date,
-            "manager_assigned": candidate.manager.full_name if candidate.manager else None
-                 })
+                "job_id": candidate.job_id,
+                "candidate_id": candidate.candidate_id,
+                "candidate_name": candidate.candidate_name,
+                "l1_interview_date": candidate.l1_date,
+                "l1_status": candidate.l1_status,
+                "l2_interview_date": candidate.l2_date,
+                "l2_status": candidate.l2_status,
+                "hr_interview_date": candidate.hr_date,
+                "hr_status": candidate.hr_status,
+                "manager_assigned": candidate.manager.full_name if candidate.manager else None
+            })
             
         return generic_json_response(
             success = True,
@@ -79,33 +82,22 @@ def get_candidates():
 @interview_bp.route('/interview-schedule', methods=['PATCH'])
 def interview_schedule():
     try:
-        candidate_id = request.args.get('candidate_id')
-        interview_datetime_str = request.args.get('interview_datetime')
-        round_type = request.args.get('round_type', None)
+        data = request.get_json()
+
+        candidate_id = data.get('candidate_id')
+        interview_datetime_str = data.get('interview_datetime')
+        round_type = data.get('round_type', None)
+        reset = data.get('reset', False)
 
         # Check required parameters
-        if not all([candidate_id, interview_datetime_str, round_type]):
+        if not all([candidate_id, round_type]):
             return generic_json_response(
                 success=False,
                 status_code=400,
-                message="Missing required parameters (candidate_id, interview_datetime, round_type)."
+                message="Missing required parameters (candidate_id, round_type)."
             )
 
-        # Parse datetime string
-        try:
-            interview_datetime = datetime.strptime(interview_datetime_str, "%Y-%m-%d %H:%M")
-
-     
-        except ValueError:
-            return generic_json_response(
-                success=False,
-                status_code=400,
-                message="Invalid datetime format. Use YYYY-MM-DD HH:MM"
-            )
-
-        # Fetch candidate
         candidate = Candidate.query.get(candidate_id)
-        
         if not candidate:
             return generic_json_response(
                 success=False,
@@ -114,6 +106,46 @@ def interview_schedule():
             )
 
         round_type = round_type.upper()
+
+        if reset:
+            # Reset date and status for the round
+            if round_type == "L1":
+                candidate.l1_date = None
+                candidate.l1_status = None
+            elif round_type == "L2":
+                candidate.l2_date = None
+                candidate.l2_status = None
+            elif round_type == "HR":
+                candidate.hr_date = None
+                candidate.hr_status = None
+            else:
+                return generic_json_response(
+                    success=False,
+                    status_code=400,
+                    message="Invalid interview round type."
+                )
+            db.session.commit()
+            return generic_json_response(
+                success=True,
+                status_code=200,
+                message=f"{round_type} interview round reset successfully."
+            )
+
+        # If not reset, proceed as before
+        if not interview_datetime_str:
+            return generic_json_response(
+                success=False,
+                status_code=400,
+                message="Missing required parameter: interview_datetime."
+            )
+        try:
+            interview_datetime = datetime.strptime(interview_datetime_str, "%Y-%m-%d %H:%M")
+        except ValueError:
+            return generic_json_response(
+                success=False,
+                status_code=400,
+                message="Invalid datetime format. Use YYYY-MM-DD HH:MM"
+            )
 
         # Logical validations
         if round_type == "L2":
@@ -129,7 +161,6 @@ def interview_schedule():
                     status_code=400,
                     message="L2 interview cannot be before L1 interview."
                 )
-
         elif round_type == "HR":
             if not candidate.l2_date:
                 return generic_json_response(
@@ -143,7 +174,6 @@ def interview_schedule():
                     status_code=400,
                     message="HR interview cannot be before L2 interview."
                 )
-
         elif round_type == "L1":
             if candidate.l2_date and interview_datetime > candidate.l2_date:
                 return generic_json_response(
@@ -159,7 +189,6 @@ def interview_schedule():
             candidate.l2_date = interview_datetime
         elif round_type == "HR":
             candidate.hr_date = interview_datetime
-
         else:
             return generic_json_response(
                 success=False,

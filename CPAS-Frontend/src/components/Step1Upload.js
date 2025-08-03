@@ -25,19 +25,16 @@ export default function Step1Upload({ onNext }) {
   };
 
   return (
-    <div>
-      <h3>Recruitment Step 1</h3>
-      <div className="mb-3">
-        <button
-          className="btn btn-primary m-2"
-          id="fetch-from-sheet"
-          onClick={handleFetchFromSheet}
-        >
-          Click to Fetch from Sheet
-        </button>
-        <button className="btn btn-secondary m-2">Add Job ID</button>
-        <button className="btn btn-info m-2">Check & Fetch Salary</button>
-      </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.5rem' }}>
+      <button
+        className="btn btn-sm btn-primary"
+        id="fetch-from-sheet"
+        onClick={handleFetchFromSheet}
+      >
+        Click to Fetch from Sheet
+      </button>
+      <button className="btn btn-sm btn-secondary">Add Job ID</button>
+      <button className="btn btn-sm btn-info">Check & Fetch Salary</button>
     </div>
   );
 }

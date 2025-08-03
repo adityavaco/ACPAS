@@ -6,32 +6,36 @@ import Step3Interview from './Step3Interview';
 import Step4OfferBGV from './Step4OfferBGV';
 
 export default function HRDashboard() {
-  const [step, setStep] = useState(1);
-
-  const renderStep = () => {
-    switch (step) {
-      case 1:
-        return <Step1Upload onNext={() => setStep(2)} />;
-      case 2:
-        return (
-          <Step2AssignManager
-            onNext={() => setStep(3)}
-            onPrev={() => setStep(1)}
-          />
-        );
-      case 3:
-        return (
-          <Step3Interview
-            onNext={() => setStep(4)}
-            onPrev={() => setStep(2)}
-          />
-        );
-      case 4:
-        return <Step4OfferBGV onPrev={() => setStep(3)} />;
-      default:
-        return null;
-    }
-  };
-
-  return <div>{renderStep()}</div>;
+  const [showRecruitmentOptions, setShowRecruitmentOptions] = useState(false);
+  // Show Step2AssignManager by default
+  return (
+    <div>
+      <div className="accordion mb-4" id="recruitmentAccordion">
+        <div className="accordion-item">
+          <h2 className="accordion-header" id="headingRecruitment">
+            <button
+              className="accordion-button"
+              type="button"
+              onClick={() => setShowRecruitmentOptions(!showRecruitmentOptions)}
+              aria-expanded={showRecruitmentOptions}
+              aria-controls="collapseRecruitment"
+            >
+              Recruitment Options
+            </button>
+          </h2>
+          <div
+            id="collapseRecruitment"
+            className={`accordion-collapse collapse${showRecruitmentOptions ? ' show' : ''}`}
+            aria-labelledby="headingRecruitment"
+            data-bs-parent="#recruitmentAccordion"
+          >
+            <div className="accordion-body">
+              <Step1Upload />
+            </div>
+          </div>
+        </div>
+      </div>
+      <Step2AssignManager />
+    </div>
+  );
 }

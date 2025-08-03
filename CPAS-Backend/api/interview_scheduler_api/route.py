@@ -588,5 +588,63 @@ def generate_meeting_link():
         "candidate_name": candidate.candidate_name
     })
 
+@interview_bp.route("/complete-recruitment", methods=["POST"])
+def complete_recruitment():
+    try:
+        data = request.get_json()
+        candidate_id = data.get("candidate_id", None)
+
+        if not candidate_id:
+            return generic_json_response(
+                success=False,
+                status_code=400,
+                message="Candidate ID is required."
+            )
+
+        candidate = Candidate.query.get(candidate_id)
+        if not candidate:
+            return generic_json_response(
+                success=False,
+                status_code=404,
+                message="Candidate not found."
+            )
+
+        # Check all required conditions are met
+        required_fields = [
+            candidate.l1_status,
+            candidate.l2_status,
+            candidate.hr_status,
+            candidate.final_decision,
+            candidate.offer_letter_status,
+            candidate.bgv_status,
+            candidate.loi_status,
+            candidate.additional_stages
+        ]
+
+        if not all(required_fields):
+            return generic_json_response(
+                success=False,
+                status_code=400,
+                message="All interview and document stages must be completed."
+            )
+
+        candidate.recruitment_completed = True
+        candidate.candidate_status = "HIRED"
+        db.session.commit()
+
+        return generic_json_response(
+            success=True,
+            status_code=200,
+            message="Candidate recruitment marked as completed."
+        )
+
+    except Exception as err:
+        return generic_json_response(
+            success=False,
+            status_code=500,
+            message="Internal server error",
+            error=str(err)
+        )
+
 
 

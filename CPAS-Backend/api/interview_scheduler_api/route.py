@@ -598,6 +598,7 @@ def generate_unique_room_name(length=16):
 def generate_meeting_link():
     data = request.get_json()
     candidate_id = data.get("candidate_id")
+    # round_type is optional now, only candidate_id is required
     if not candidate_id:
         return jsonify({"success": False, "message": "candidate_id required"}), 400
 

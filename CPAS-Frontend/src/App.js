@@ -3,6 +3,7 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Sidebar from './components/Sidebar';
 import HRDashboard from './components/HRDashboard';
+import Step3Interview from './components/Step3Interview';
 import Onboarding from './pages/Onboarding';
 import Offboarding from './pages/Offboarding';
 
@@ -31,6 +32,7 @@ function App() {
           <Routes>
             <Route path="/" element={<Navigate to="/recruitment" />} />
             <Route path="/recruitment" element={<HRDashboard reloadKey={reloadKey} />} />
+            <Route path="/step3interview" element={<Step3Interview />} />
             <Route path="/onboarding" element={<Onboarding />} />
             <Route path="/offboarding" element={<Offboarding />} />
           </Routes>

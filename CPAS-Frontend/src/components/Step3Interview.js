@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import './StarRating.css'; // optional for better star style
 
-export default function Step3Interview({ onNext,onPrev }) {
+export default function Step3Interview() {
+  const navigate = useNavigate();
   const [popup, setPopup] = useState(null);
   const [selection, setSelection] = useState("");
   const [statusColor, setStatusColor] = useState("");
@@ -116,147 +118,153 @@ export default function Step3Interview({ onNext,onPrev }) {
   };
 
   return (
-    <div>
-      <h3>Recruitment Step 3: Interview</h3>
-      <table className="table table-striped">
-        <thead>
-          <tr>
-            <th>Candid</th>
-            <th>Candidate Name</th>
-            <th>Interview Date & Time</th>
-            <th>GMeet Link</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr className={getRowColor()}>
-            <td>CAN002</td>
-            <td>Jane Smith</td>
-            <td>2025-07-25, 10:00 AM</td>
-            <td>
-              <button
-                className="btn btn-outline-success"
-                onClick={async () => {
-                  try {
-                    const res = await fetch('http://localhost:5000/interviews/generate-meeting-link', {
-                      method: 'POST',
-                      headers: { 'Content-Type': 'application/json' }
-                    });
-                    const data = await res.json();
-                    if (data.success && data.meeting_url) {
-                      window.open(data.meeting_url, '_blank');
-                    } else {
-                      alert('Failed to generate meeting link');
-                    }
-                  } catch (err) {
-                    alert('Error generating meeting link');
-                  }
-                }}
-              >
-                Generate Link
-              </button>
-            </td>
-            <td>
-              {['L1', 'L2', 'HR', 'JD'].map(stage => (
-                <button
-                  className={`btn btn-sm m-1 ${getColorClass(stage)}`}
-                  key={stage}
-                  onClick={() => openPopup(stage)}
-                >
-                  {stage}
-                </button>
-              ))}
-            </td>
-          </tr>
-        </tbody>
-      </table>
-      <div className="d-flex justify-content-between mt-3">
-        <button className="btn btn-secondary" onClick={onPrev}>
-          Previous
-        </button>
-        <button className="btn btn-success" onClick={onNext}>
-          Next Page
-        </button>
-      </div>
-
-      {popup && (
-        <div className="modal d-block" tabIndex="-1">
-          <div className="modal-dialog modal-lg">
-            <div className="modal-content">
-              <div className="modal-header">
-                <h5 className="modal-title">{popup === 'JD' ? 'JD Evaluation' : `${popup} Feedback`}</h5>
-                <button className="btn-close" onClick={closePopup}></button>
-              </div>
-              <div className="modal-body">
-                {popup === 'JD' ? (
-                  <div>
-                    <div className="mb-3">
-                      <label>Relevant Years of Experience</label>
-                      {renderStars('experience')}
-                    </div>
-                    <div className="mb-3">
-                      <label>Techstack / Skillset</label>
-                      {renderStars('skillset')}
-                    </div>
-                    <div className="mb-3">
-                      <label>Communication Skills</label>
-                      {renderStars('communication')}
-                    </div>
-                    <div className="mb-3">
-                      <label>Interview</label>
-                      {renderStars('interview')}
-                    </div>
-                    <div className="mb-3">
-                      <label>Aptitude</label>
-                      {renderStars('aptitude')}
-                    </div>
-                    <div className="mb-3">
-                      <strong>Average Score: {calculateAverage()} / 5</strong>
-                    </div>
-                    <div className="mb-3">
-                      <label>Final Decision:</label>
-                      <select
-                        className="form-select"
-                        value={jdRatings.decision || ''}
-                        onChange={(e) =>
-                          setJdRatings({ ...jdRatings, decision: e.target.value })
+    <div className="mb-4 px-0">
+      <div className="card shadow-sm border-0 rounded-0">
+        <div className="card-header bg-secondary text-white fw-semibold fs-5">
+          Interview Progress Tracker
+        </div>
+        <div className="card-body bg-light">
+          <h3>Recruitment Step 3: Interview</h3>
+          <table className="table table-bordered">
+            <thead>
+              <tr>
+                <th>Candid</th>
+                <th>Candidate Name</th>
+                <th>Interview Date & Time</th>
+                <th>GMeet Link</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr className={getRowColor()}>
+                <td>CAN002</td>
+                <td>Jane Smith</td>
+                <td>2025-07-25, 10:00 AM</td>
+                <td>
+                  <button
+                    className="btn btn-outline-success"
+                    onClick={async () => {
+                      try {
+                        const res = await fetch('http://localhost:5000/interviews/generate-meeting-link', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' }
+                        });
+                        const data = await res.json();
+                        if (data.success && data.meeting_url) {
+                          window.open(data.meeting_url, '_blank');
+                        } else {
+                          alert('Failed to generate meeting link');
                         }
-                      >
-                        <option value="">Select</option>
-                        <option value="Selected">Selected</option>
-                        <option value="Rejected">Rejected</option>
-                      </select>
-                    </div>
-                  </div>
-                ) : (
-                  <div>
-                    <textarea
-                      className="form-control mb-2"
-                      placeholder={`${popup} feedback`}
-                      value={feedbacks[popup]?.feedback || ''}
-                      onChange={(e) => handleFeedbackChange(e, popup)}
-                    />
-                    <label className="form-label">Candidate Decision</label>
-                    <select
-                      className="form-select"
-                      value={feedbacks[popup]?.selection || ''}
-                      onChange={(e) => handleSelectionChange(e, popup)}
+                      } catch (err) {
+                        alert('Error generating meeting link');
+                      }
+                    }}
+                  >
+                    Generate Link
+                  </button>
+                </td>
+                <td>
+                  {['L1', 'L2', 'HR', 'JD'].map(stage => (
+                    <button
+                      className={`btn btn-sm m-1 ${getColorClass(stage)}`}
+                      key={stage}
+                      onClick={() => openPopup(stage)}
                     >
-                      <option value="">Select</option>
-                      <option value="Selected">Selected</option>
-                      <option value="Not Selected">Not Selected</option>
-                    </select>
+                      {stage}
+                    </button>
+                  ))}
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <div className="d-flex justify-content-between mt-3">
+            <button className="btn btn-secondary" onClick={() => navigate('/recruitment')}>
+              Previous
+            </button>
+            <button className="btn btn-success" onClick={() => navigate('/step4offerbgv')}>
+              Next Page
+            </button>
+          </div>
+          {popup && (
+            <div className="modal d-block" tabIndex="-1">
+              <div className="modal-dialog modal-lg">
+                <div className="modal-content">
+                  <div className="modal-header">
+                    <h5 className="modal-title">{popup === 'JD' ? 'JD Evaluation' : `${popup} Feedback`}</h5>
+                    <button className="btn-close" onClick={closePopup}></button>
                   </div>
-                )}
-              </div>
-              <div className="modal-footer">
-                <button className="btn btn-primary" onClick={handleSubmit}>Submit</button>
-                <button className="btn btn-secondary" onClick={closePopup}>Close</button>
+                  <div className="modal-body">
+                    {popup === 'JD' ? (
+                      <div>
+                        <div className="mb-3">
+                          <label>Relevant Years of Experience</label>
+                          {renderStars('experience')}
+                        </div>
+                        <div className="mb-3">
+                          <label>Techstack / Skillset</label>
+                          {renderStars('skillset')}
+                        </div>
+                        <div className="mb-3">
+                          <label>Communication Skills</label>
+                          {renderStars('communication')}
+                        </div>
+                        <div className="mb-3">
+                          <label>Interview</label>
+                          {renderStars('interview')}
+                        </div>
+                        <div className="mb-3">
+                          <label>Aptitude</label>
+                          {renderStars('aptitude')}
+                        </div>
+                        <div className="mb-3">
+                          <strong>Average Score: {calculateAverage()} / 5</strong>
+                        </div>
+                        <div className="mb-3">
+                          <label>Final Decision:</label>
+                          <select
+                            className="form-select"
+                            value={jdRatings.decision || ''}
+                            onChange={(e) =>
+                              setJdRatings({ ...jdRatings, decision: e.target.value })
+                            }
+                          >
+                            <option value="">Select</option>
+                            <option value="Selected">Selected</option>
+                            <option value="Rejected">Rejected</option>
+                          </select>
+                        </div>
+                      </div>
+                    ) : (
+                      <div>
+                        <textarea
+                          className="form-control mb-2"
+                          placeholder={`${popup} feedback`}
+                          value={feedbacks[popup]?.feedback || ''}
+                          onChange={(e) => handleFeedbackChange(e, popup)}
+                        />
+                        <label className="form-label">Candidate Decision</label>
+                        <select
+                          className="form-select"
+                          value={feedbacks[popup]?.selection || ''}
+                          onChange={(e) => handleSelectionChange(e, popup)}
+                        >
+                          <option value="">Select</option>
+                          <option value="Selected">Selected</option>
+                          <option value="Not Selected">Not Selected</option>
+                        </select>
+                      </div>
+                    )}
+                  </div>
+                  <div className="modal-footer">
+                    <button className="btn btn-primary" onClick={handleSubmit}>Submit</button>
+                    <button className="btn btn-secondary" onClick={closePopup}>Close</button>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
+          )}
         </div>
-      )}
+      </div>
     </div>
   );
 }

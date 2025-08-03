@@ -1,13 +1,16 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import Modal from 'react-bootstrap/Modal';
 import Button from 'react-bootstrap/Button';
 
 export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
+  const navigate = useNavigate();
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   // Modal state
   const [modal, setModal] = useState({ show: false, rowIdx: null, round: null, mode: 'schedule' });
   const [modalDate, setModalDate] = useState('');
+  const [modalMeetLink, setModalMeetLink] = useState('');
 
   // Always fetch fresh data from backend (don't rely on localStorage for candidate data)
   const fetchCandidates = () => {
@@ -26,7 +29,8 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
             l2_status: (c.l2_status || 'not_available').toLowerCase(),
             hr_datetime: c.hr_interview_date || '',
             hr_status: (c.hr_status || 'not_available').toLowerCase(),
-            manager: c.manager_assigned || ''
+            manager: c.manager_assigned || '',
+            interview_link: c.interview_link || ''
           }));
           setData(mapped);
         } else {
@@ -46,13 +50,33 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
   }, [reloadKey]);
 
   // Modal open/close helpers
-  const openModal = (rowIdx, round, mode = 'schedule') => {
+  const openModal = async (rowIdx, round, mode = 'schedule') => {
     setModal({ show: true, rowIdx, round, mode });
     if (mode === 'schedule') {
       setModalDate(data[rowIdx][`${round}_datetime`] || '');
     }
+    // Always fetch the latest interview_link from backend for this candidate
+    const candid = data[rowIdx]?.candid;
+    if (candid) {
+      try {
+        const res = await fetch(`http://localhost:5000/interviews/get-candidates?candidate_id=${candid}`);
+        const result = await res.json();
+        if (result.success && Array.isArray(result.data) && result.data.length > 0) {
+          setModalMeetLink(result.data[0].interview_link || '');
+        } else {
+          setModalMeetLink(data[rowIdx]?.interview_link || '');
+        }
+      } catch (e) {
+        setModalMeetLink(data[rowIdx]?.interview_link || '');
+      }
+    } else {
+      setModalMeetLink('');
+    }
   };
-  const closeModal = () => setModal({ show: false, rowIdx: null, round: null, mode: 'schedule' });
+  const closeModal = () => {
+    setModal({ show: false, rowIdx: null, round: null, mode: 'schedule' });
+    setModalMeetLink('');
+  };
 
 
   // Manager assignment handler
@@ -108,7 +132,7 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
               <th>Candid</th>
               <th>Job ID</th>
               <th>Candidate Name</th>
-              <th>Interview Date & Time</th>
+              <th>Interview Status</th>
               <th>Assign Manager</th>
               <th>Reject Candidate</th>
             </tr>
@@ -201,6 +225,36 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
               value={modalDate}
               onChange={e => setModalDate(e.target.value)}
             />
+            {/* Generate Meet Link field and button side by side */}
+            <div className="mb-3 d-flex align-items-center gap-2">
+              <input
+                type="text"
+                className="form-control"
+                style={{ flex: 1 }}
+                value={modalMeetLink}
+                readOnly
+                placeholder="Meet link will appear here"
+              />
+              <Button
+                variant="info"
+                style={{ whiteSpace: 'nowrap' }}
+                onClick={async () => {
+                  const row = data[modal.rowIdx];
+                  const response = await fetch('http://localhost:5000/interviews/generate-meeting-link', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ candidate_id: row.candid })
+                  });
+                  const result = await response.json();
+                  if (result.success && result.meeting_url) {
+                    setData(prev => prev.map((r, i) => i === modal.rowIdx ? { ...r, interview_link: result.meeting_url } : r));
+                  } else {
+                    alert('Failed to generate meet link: ' + result.message);
+                  }
+                }}
+              >Generate Meet Link</Button>
+            </div>
+            {/* Action buttons row */}
             <div className="d-flex gap-2 mb-3">
               <Button
                 variant="primary"
@@ -232,7 +286,6 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
                 variant="secondary"
                 onClick={async () => {
                   const row = data[modal.rowIdx];
-                  // Backend endpoint to reset interview round (date and status)
                   const response = await fetch('http://localhost:5000/interviews/interview-schedule', {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
@@ -247,6 +300,7 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
                   if (result.success) {
                     fetchCandidates();
                     setModalDate('');
+                    setModalMeetLink('');
                     closeModal();
                   } else {
                     alert('Failed to reset: ' + result.message);
@@ -302,6 +356,7 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
                 disabled={!data[modal.rowIdx]?.[`${modal.round}_datetime`]}
               >Reject</Button>
             </div>
+            {/* Status and Interview Date */}
             <div className="mb-2">
               Status: <span className={
                 data[modal.rowIdx]?.[`${modal.round}_status`] === 'accepted' ? 'text-success' :
@@ -316,6 +371,17 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
           </div>
         </Modal.Body>
       </Modal>
+      <div className="d-flex justify-content-end mt-4">
+        <Button variant="primary" onClick={() => {
+          if (onNext) {
+            onNext();
+          } else {
+            navigate('/step3interview');
+          }
+        }}>
+          Next
+        </Button>
+      </div>
     </div>
   );
   // ...existing code...

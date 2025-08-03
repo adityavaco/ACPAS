@@ -52,8 +52,8 @@ def get_candidates():
             "job_id" : candidate.job_id,
             "candidate_id": candidate.candidate_id,
             "candidate_name": candidate.candidate_name,
-            "l1_interview_date": candidate.L1_date,
-            "l2_interview_date": candidate.L2_date,
+            "l1_interview_date": candidate.l1_date,
+            "l2_interview_date": candidate.l2_date,
             "hr_interview_date": candidate.hr_date,
             "manager_assigned": candidate.manager.full_name if candidate.manager else None
                  })
@@ -76,7 +76,7 @@ def get_candidates():
 
 
 
-@interview_bp.route('/interview-schedule', methods = ['PATCH'])
+@interview_bp.route('/interview-schedule', methods=['PATCH'])
 def interview_schedule():
     try:
         candidate_id = request.args.get('candidate_id')
@@ -84,66 +84,104 @@ def interview_schedule():
         round_type = request.args.get('round_type', None)
 
         # Check required parameters
-        if not all([candidate_id, interview_datetime_str]):
+        if not all([candidate_id, interview_datetime_str, round_type]):
             return generic_json_response(
-            success = False,
-            status_code = 400,
-            message="Missing required parameters."
-                                         )
+                success=False,
+                status_code=400,
+                message="Missing required parameters (candidate_id, interview_datetime, round_type)."
+            )
+
+        # Parse datetime string
         try:
-        # Parse combined datetime string
             interview_datetime = datetime.strptime(interview_datetime_str, "%Y-%m-%d %H:%M")
 
      
         except ValueError:
             return generic_json_response(
-            success = False,
-            status_code = 400,
-            message="Invalid datetime format. Use YYYY-MM-DD HH:MM")
-        
-         # Look up candidate
+                success=False,
+                status_code=400,
+                message="Invalid datetime format. Use YYYY-MM-DD HH:MM"
+            )
+
+        # Fetch candidate
         candidate = Candidate.query.get(candidate_id)
         
         if not candidate:
             return generic_json_response(
-                    success = False,
-                    status_code = 404,
-                    message="Candidate not found")
-        
-        # Update and commit
-        if round_type.upper() == "L1":
-            candidate.L1_date = interview_datetime
+                success=False,
+                status_code=404,
+                message="Candidate not found"
+            )
 
+        round_type = round_type.upper()
 
-        elif round_type.upper() == "L2":
-            candidate.L2_date = interview_datetime
+        # Logical validations
+        if round_type == "L2":
+            if not candidate.l1_date:
+                return generic_json_response(
+                    success=False,
+                    status_code=400,
+                    message="Cannot schedule L2 before L1 is scheduled."
+                )
+            if interview_datetime < candidate.l1_date:
+                return generic_json_response(
+                    success=False,
+                    status_code=400,
+                    message="L2 interview cannot be before L1 interview."
+                )
 
-        elif round_type.upper() == "HR":
+        elif round_type == "HR":
+            if not candidate.l2_date:
+                return generic_json_response(
+                    success=False,
+                    status_code=400,
+                    message="Cannot schedule HR before L2 is scheduled."
+                )
+            if interview_datetime < candidate.l2_date:
+                return generic_json_response(
+                    success=False,
+                    status_code=400,
+                    message="HR interview cannot be before L2 interview."
+                )
+
+        elif round_type == "L1":
+            if candidate.l2_date and interview_datetime > candidate.l2_date:
+                return generic_json_response(
+                    success=False,
+                    status_code=400,
+                    message="L1 interview cannot be after L2 is already scheduled."
+                )
+
+        # Update interview date
+        if round_type == "L1":
+            candidate.l1_date = interview_datetime
+        elif round_type == "L2":
+            candidate.l2_date = interview_datetime
+        elif round_type == "HR":
             candidate.hr_date = interview_datetime
 
         else:
             return generic_json_response(
-                success = False,
-                status_code = 400,
-                message = "All interviews already scheduled."
+                success=False,
+                status_code=400,
+                message="Invalid interview round type."
             )
-        
+
         db.session.commit()
         return generic_json_response(
-                    success = True,
-                    status_code = 200,
-                    message= "Interview date updated successfully.")
-
-    
+            success=True,
+            status_code=200,
+            message=f"{round_type} interview date updated successfully."
+        )
 
     except Exception as err:
         return generic_json_response(
-                                     success=False,
-                                     status_code = 500,
-                                     message="Internal server error",
-                                     error= str(err) 
-                                     )
-    
+            success=False,
+            status_code=500,
+            message="Internal server error",
+            error=str(err)
+        )
+
 
 @interview_bp.route("/managers", methods=["GET", "POST"])
 def managers_config():
@@ -152,7 +190,7 @@ def managers_config():
     '''    
     try:
         if request.method == "GET":
-            # Get all employees with role 'manager'
+            # Get all employees with the role as a 'manager'.
             try:
                 managers = Employee.query.filter_by(is_manager=True).all()
                 response_body = [
@@ -264,8 +302,263 @@ def candidate_reject():
                                      message="Internal server error",
                                      error= str(err) 
                                      )
+
+
+@interview_bp.route("/candidate-stage", methods=["GET", "POST"])
+def candidate_stage_update():
+    """
+    GET: Fetch interview stage feedback/status for a candidate
+    POST: Update interview stage feedback/status for a candidate
+    """
+    try:
+        if request.method == "POST":
+            data = request.get_json()
+
+            candidate_id = data.get("candidate_id", None)
+            stage = data.get("stage", None)  # Expected values: "L1", L2", "HR", "JD"
+            feedback = data.get("feedback", None)
+            status = data.get("status", None)
+            final_average_score = data.get("final_average_score" ,None)
+
+            # Validate required fields
+            if not candidate_id or not stage or not feedback or not status:
+                return generic_json_response(
+                    success=False,
+                    status_code=400,
+                    message="Missing required parameters."
+                )
+
+            # Find candidate
+            candidate = Candidate.query.get(candidate_id)
+            if not candidate:
+                return generic_json_response(
+                    success=False,
+                    status_code=404,
+                    message="Candidate not found."
+                )
+
+            # Update stage-wise data 
+            # Enforce stage order and interview date presence
+            if stage.upper() == "L1":
+                if not candidate.l1_date:
+                    return generic_json_response(
+                        success=False, 
+                        status_code=400, 
+                        message="L1 interview not scheduled.")
+                
+                candidate.l1_feedback = feedback
+                candidate.l1_status = status.upper()
+            
+            elif stage.upper() == "L2":
+                if not candidate.l1_status:
+                    return generic_json_response(
+                        success=False, 
+                        status_code=400, 
+                        message="L1 feedback/status must be submitted before L2.")
+                
+                if not candidate.l2_date:
+                    return generic_json_response(
+                        success=False, 
+                        status_code=400, 
+                        message="L2 interview not scheduled.")
+                
+                candidate.l2_feedback = feedback
+                candidate.l2_status = status.upper()
+            
+            elif stage.upper() == "HR":
+                if not candidate.l2_status:
+                    return generic_json_response(
+                        success=False, 
+                        status_code=400, 
+                        message="L2 feedback/status must be submitted before HR.")
+                
+                if not candidate.hr_date:
+                    return generic_json_response(
+                        success=False, 
+                        status_code=400, 
+                        message="HR interview not scheduled.")
+                
+                candidate.hr_feedback = feedback
+                candidate.hr_status = status.upper()
+            
+            elif stage.upper() == "JD":
+                if not candidate.hr_status:
+                    return generic_json_response(
+                        success=False, 
+                        status_code=400, 
+                        message="HR feedback/status must be submitted before final decision.")
+                
+                if not final_average_score:
+                    return generic_json_response(
+                        success=False, 
+                        status_code=400, 
+                        message="Final average score is required.")
+                
+                candidate.final_decision = status.upper()
+                candidate.final_average_score = final_average_score
+            
+            else:
+                return generic_json_response(
+                    success=False, 
+                    status_code=400, 
+                    message="Invalid stage provided.")
+            
+
+            db.session.commit()
+
+            return generic_json_response(
+                success=True,
+                status_code=200,
+                message="Feedback registered successfully."
+            )
+
+
+        if request.method == "GET":
+            candidates = Candidate.query.filter(
+            (Candidate.l1_date.isnot(None)) |
+            (Candidate.l2_date.isnot(None)) |
+            (Candidate.hr_date.isnot(None))
+            ).all()
+
+            if not candidates:
+                return generic_json_response(
+                    success=True,
+                    status_code=200,
+                    message="No candidates with interview dates found.",
+                    data=[]
+                )
+
+            response_data = []
+            for candidate in candidates:
+                response_data.append({
+                    "candidate_id": candidate.candidate_id,
+                    "candidate_name": candidate.candidate_name,
+                    "l1_feedback": candidate.l1_feedback,
+                    "l1_status": candidate.l1_status,
+                    "l1_date": candidate.l1_date,
+                    "l2_feedback": candidate.l2_feedback,
+                    "l2_status": candidate.l2_status,
+                    "l2_date": candidate.l2_date,
+                    "hr_feedback": candidate.hr_feedback,
+                    "hr_status": candidate.hr_status,
+                    "hr_date": candidate.hr_date,
+                    "final_average_score" : candidate.final_average_score,
+                    "final_decision": candidate.final_decision,
+                    "candidate_status": candidate.candidate_status
+                })
+            
+            return generic_json_response(
+                success=True,
+                status_code=200,
+                message="Candidates with interview stages fetched successfully.",
+                data=response_data
+            )
+            
+    except Exception as err:
+            return generic_json_response(
+                success=False,
+                status_code=500,
+                message="Internal server error",
+                error=str(err)
+            )
     
-    
+
+@interview_bp.route("/candidate_documents_status" , methods = ["GET", "POST"])
+def candidate_documents_update():
+    try:
+        if request.method == "POST":
+
+            data = request.get_json()
+
+            candidate_id = data.get("candidate_id", None)
+            offer_letter_status = data.get("offer_letter_status", None)  
+            bgv_status = data.get("bgv_status", None)
+            loi_status = data.get("loi_status", None)
+            additional_stages = data.get("additional_stages", None)
+
+            # Validate required fields
+            if not candidate_id or not offer_letter_status or not bgv_status or not loi_status or not additional_stages:
+                return generic_json_response(
+                    success=False,
+                    status_code=400,
+                    message="Missing required parameters."
+                )
+
+            # Find candidate
+            candidate = Candidate.query.get(candidate_id)
+            if not candidate:
+                return generic_json_response(
+                    success=False,
+                    status_code=404,
+                    message="Candidate not found."
+                    )
+
+             # Update only if provided
+
+            if offer_letter_status is not None:
+                candidate.offer_letter_status = offer_letter_status
+            
+            if bgv_status is not None:
+                candidate.bgv_status = bgv_status
+            
+            if loi_status is not None:
+                candidate.loi_status = loi_status
+
+            if additional_stages is not None:
+                candidate.additional_stages = additional_stages
+
+            db.session.commit()
+
+            return generic_json_response(
+                success=True,
+                status_code=200,
+                message="Candidate documents status updated."
+            )
+
+
+        if request.method == "GET":
+            candidate_id = request.args.get("candidate_id", None)
+
+            if not candidate_id:
+                return generic_json_response(
+                    success=False,
+                    status_code=400,
+                    message= "Candidate ID is required."
+                )
+            
+            candidate = Candidate.query.get(candidate_id)
+            if not candidate:
+                return generic_json_response(
+                    success=False,
+                    status_code = 404,
+                    message="Candidate not found."
+                )
+            
+            document_status_data = {
+                    "candidate_id": candidate.candidate_id,
+                    "candidate_name": candidate.candidate_name,                
+                    "offer_letter_status": candidate.offer_letter_status,
+                    "bgv_status": candidate.bgv_status,
+                    "loi_status": candidate.loi_status,
+                    "additional_stages": candidate.additional_stages
+                    }
+            
+            return generic_json_response(
+                success=True,
+                status_code=200,
+                message="Candidate document status fetched successfully.",
+                data=document_status_data
+            )
+            
+    except Exception as err:
+            return generic_json_response(
+                success=False,
+                status_code=500,
+                message="Internal server error",
+                error=str(err)
+            )
+
+
 JITSI_DOMAIN = "meet.jit.si"
 
 def generate_unique_room_name(length=16):

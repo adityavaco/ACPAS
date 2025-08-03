@@ -7,8 +7,23 @@ import Onboarding from './pages/Onboarding';
 import Offboarding from './pages/Offboarding';
 
 function App() {
+  const handleLogout = () => {
+    // Add your logout logic here (e.g., clear tokens, redirect, etc.)
+    alert('Logged out!');
+  };
+
   return (
     <Router>
+      {/* Global Navbar */}
+      <nav className="navbar navbar-expand-lg navbar-dark bg-primary" style={{borderRadius: 0}}>
+        <span className="navbar-brand fw-bold ps-3">CPAS Dashboard</span>
+        <button
+          className="btn btn-outline-light ms-auto me-3"
+          onClick={handleLogout}
+        >
+          Logout
+        </button>
+      </nav>
       <div className="d-flex">
         <Sidebar />
         <div className="p-4 flex-grow-1">

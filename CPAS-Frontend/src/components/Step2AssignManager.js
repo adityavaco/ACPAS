@@ -1,24 +1,68 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
 export default function Step2AssignManager({ onNext, onPrev }) {
-  const [data, setData] = useState([
-    { id: 101, candid: 'CAN001', name: 'John Doe', datetime: '', manager: '' },
-    { id: 102, candid: 'CAN002', name: 'Priya Singh', datetime: '', manager: '' },
-    { id: 103, candid: 'CAN003', name: 'Alex Roy', datetime: '', manager: '' },
-    { id: 104, candid: 'CAN004', name: 'Sneha Das', datetime: '', manager: '' },
-    { id: 105, candid: 'CAN005', name: 'Karan Mehra', datetime: '', manager: '' },
-  ]);
+  const [data, setData] = useState([]);
+
+  // Load from localStorage if available, else fetch from backend
+  useEffect(() => {
+    const saved = localStorage.getItem('step2_assign_manager');
+    if (saved) {
+      setData(JSON.parse(saved));
+    } else {
+      fetch('http://localhost:5000/interviews/get-candidates')
+        .then(res => res.json())
+        .then(result => {
+          if (result.success && Array.isArray(result.data)) {
+            const mapped = result.data.map((c, idx) => ({
+              id: c.job_id,
+              candid: c.candidate_id,
+              name: c.candidate_name,
+              datetime: '',
+              manager: ''
+            }));
+            setData(mapped);
+            localStorage.setItem('step2_assign_manager', JSON.stringify(mapped));
+          } else {
+            setData([]);
+          }
+        })
+        .catch(() => setData([]));
+    }
+  }, []);
 
   const handleDateTimeChange = (index, value) => {
     const updated = [...data];
     updated[index].datetime = value;
     setData(updated);
+    localStorage.setItem('step2_assign_manager', JSON.stringify(updated));
   };
 
   const handleManagerChange = (index, value) => {
     const updated = [...data];
     updated[index].manager = value;
     setData(updated);
+    localStorage.setItem('step2_assign_manager', JSON.stringify(updated));
+  };
+
+  // Save to backend on Next Page
+  const handleNext = async () => {
+    // Save to DB for all rows with datetime and manager selected
+    const updates = data.filter(row => row.datetime && row.manager);
+    if (updates.length > 0) {
+      await Promise.all(updates.map(row =>
+        fetch('http://localhost:5000/interviews/update-interview', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            candidate_id: row.candid,
+            interview_datetime: row.datetime,
+            manager: row.manager
+          })
+        })
+      ));
+    }
+    localStorage.setItem('step2_assign_manager', JSON.stringify(data));
+    if (onNext) onNext();
   };
 
   return (

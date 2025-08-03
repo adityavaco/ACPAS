@@ -136,7 +136,22 @@ export default function Step3Interview({ onNext,onPrev }) {
             <td>
               <button
                 className="btn btn-outline-success"
-                onClick={() => window.open('https://meet.google.com/dummy-link', '_blank')}
+                onClick={async () => {
+                  try {
+                    const res = await fetch('http://localhost:5000/interviews/generate-meeting-link', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' }
+                    });
+                    const data = await res.json();
+                    if (data.success && data.meeting_url) {
+                      window.open(data.meeting_url, '_blank');
+                    } else {
+                      alert('Failed to generate meeting link');
+                    }
+                  } catch (err) {
+                    alert('Error generating meeting link');
+                  }
+                }}
               >
                 Generate Link
               </button>

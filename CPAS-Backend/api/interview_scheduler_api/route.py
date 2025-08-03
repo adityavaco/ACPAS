@@ -1,7 +1,10 @@
 from flask import Blueprint, request
 from utility import read_csv_data, generic_json_response
-from models.models import Employee, Candidate,db
+from models.models import Employee, Candidate, db
 from datetime import datetime
+import secrets
+import string
+from flask import jsonify
 
 interview_bp = Blueprint('api', __name__, url_prefix="/interviews")
 
@@ -11,12 +14,21 @@ interview_bp = Blueprint('api', __name__, url_prefix="/interviews")
 def fetch_data_from_sheet():
     try:
         candidate_data = read_csv_data("files/data.csv")
-        candidate_instance = [Candidate(**data) for data in candidate_data]
-        db.session.add_all(candidate_instance)
-        db.session.commit()    
+        new_candidates = []
+        for data in candidate_data:
+            # Check for existing candidate by job_id and candidate_name
+            exists = Candidate.query.filter_by(job_id=data.get("job_id"), candidate_name=data.get("candidate_name")).first()
+            if not exists:
+                new_candidates.append(Candidate(**data))
+        if new_candidates:
+            db.session.add_all(new_candidates)
+            db.session.commit()
+            msg = f"Inserted {len(new_candidates)} new candidates."
+        else:
+            msg = "No new candidates to insert."
         return generic_json_response(success=True, 
                                  status_code=200,
-                                 message = "Data inserted successfully!")
+                                 message = msg)
     
     except Exception as err:
         return generic_json_response(
@@ -252,6 +264,36 @@ def candidate_reject():
                                      message="Internal server error",
                                      error= str(err) 
                                      )
+    
+    
+JITSI_DOMAIN = "meet.jit.si"
+
+def generate_unique_room_name(length=16):
+    characters = string.ascii_letters + string.digits
+    return ''.join(secrets.choice(characters) for _ in range(length))
+
+@interview_bp.route('/generate-meeting-link', methods=['POST'])
+def generate_meeting_link():
+    data = request.get_json()
+    candidate_id = data.get("candidate_id")
+    if not candidate_id:
+        return jsonify({"success": False, "message": "candidate_id required"}), 400
+
+    room_name = generate_unique_room_name()
+    jitsi_url = f"https://{JITSI_DOMAIN}/{room_name}"
+
+    candidate = Candidate.query.get(candidate_id)
+    if not candidate:
+        return jsonify({"success": False, "message": "Candidate not found"}), 404
+
+    candidate.interview_link = jitsi_url
+    db.session.commit()
+
+    return jsonify({
+        "success": True,
+        "meeting_url": jitsi_url,
+        "candidate_name": candidate.candidate_name
+    })
 
 
 

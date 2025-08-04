@@ -11,6 +11,7 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
   const [modal, setModal] = useState({ show: false, rowIdx: null, round: null, mode: 'schedule' });
   const [modalDate, setModalDate] = useState('');
   const [modalMeetLink, setModalMeetLink] = useState('');
+  const [modalFeedback, setModalFeedback] = useState('');
 
   // Always fetch fresh data from backend (don't rely on localStorage for candidate data)
   const fetchCandidates = () => {
@@ -261,107 +262,154 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
                 }}
               >Generate Meet Link</Button>
             </div>
+            {/* Feedback input for the round, just below meet link */}
+            <div className="mb-3">
+              <label className="form-label">Feedback</label>
+              <textarea
+                className="form-control"
+                value={modalFeedback}
+                onChange={e => setModalFeedback(e.target.value)}
+                placeholder={`Enter feedback for ${modal.round ? modal.round.toUpperCase() : ''}`}
+                rows={2}
+              />
+            </div>
             {/* Action buttons row */}
-            <div className="d-flex gap-2 mb-3">
-              <Button
-                variant="primary"
-                onClick={async () => {
-                  const row = data[modal.rowIdx];
-                  const formattedDatetime = modalDate.replace('T', ' ');
-                  const response = await fetch('http://localhost:5000/interviews/interview-schedule', {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      candidate_id: row.candid,
-                      interview_datetime: formattedDatetime,
-                      round_type: modal.round ? modal.round.toUpperCase() : 'L1'
-                    })
-                  });
-                  const result = await response.json();
-                  if (result.success) {
-                    fetchCandidates();
-                    closeModal();
-                  } else {
-                    alert('Failed to schedule: ' + result.message);
-                  }
-                }}
-                disabled={!modalDate}
-              >
-                Save
-              </Button>
-              <Button
-                variant="secondary"
-                onClick={async () => {
-                  const row = data[modal.rowIdx];
-                  const response = await fetch('http://localhost:5000/interviews/interview-schedule', {
-                    method: 'PATCH',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      candidate_id: row.candid,
-                      interview_datetime: null,
-                      round_type: modal.round ? modal.round.toUpperCase() : 'L1',
-                      reset: true
-                    })
-                  });
-                  const result = await response.json();
-                  if (result.success) {
-                    fetchCandidates();
-                    setModalDate('');
-                    setModalMeetLink('');
-                    closeModal();
-                  } else {
-                    alert('Failed to reset: ' + result.message);
-                  }
-                }}
-              >Reset</Button>
-              <Button
-                variant="success"
-                onClick={async () => {
-                  const row = data[modal.rowIdx];
-                  const response = await fetch('http://localhost:5000/interviews/candidate-stage', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      candidate_id: row.candid,
-                      stage: modal.round ? modal.round.toUpperCase() : 'L1',
-                      feedback: 'Accepted',
-                      status: 'ACCEPTED'
-                    })
-                  });
-                  const result = await response.json();
-                  if (result.success) {
-                    fetchCandidates();
-                    closeModal();
-                  } else {
-                    alert('Failed to update status: ' + result.message);
-                  }
-                }}
-                disabled={!data[modal.rowIdx]?.[`${modal.round}_datetime`]}
-              >Accept</Button>
-              <Button
-                variant="danger"
-                onClick={async () => {
-                  const row = data[modal.rowIdx];
-                  const response = await fetch('http://localhost:5000/interviews/candidate-stage', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({
-                      candidate_id: row.candid,
-                      stage: modal.round ? modal.round.toUpperCase() : 'L1',
-                      feedback: 'Rejected',
-                      status: 'REJECTED'
-                    })
-                  });
-                  const result = await response.json();
-                  if (result.success) {
-                    fetchCandidates();
-                    closeModal();
-                  } else {
-                    alert('Failed to update status: ' + result.message);
-                  }
-                }}
-                disabled={!data[modal.rowIdx]?.[`${modal.round}_datetime`]}
-              >Reject</Button>
+            <div className="d-flex gap-2 mb-3 justify-content-between">
+              <div>
+                <Button
+                  className="me-2"
+                  variant="primary"
+                  onClick={async () => {
+                    const row = data[modal.rowIdx];
+                    const formattedDatetime = modalDate.replace('T', ' ');
+                    const response = await fetch('http://localhost:5000/interviews/interview-schedule', {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        candidate_id: row.candid,
+                        interview_datetime: formattedDatetime,
+                        round_type: modal.round ? modal.round.toUpperCase() : 'L1',
+                        feedback: modalFeedback
+                      })
+                    });
+                    const result = await response.json();
+                    if (result.success) {
+                      fetchCandidates();
+                      closeModal();
+                    } else {
+                      alert('Failed to schedule: ' + result.message);
+                    }
+                  }}
+                  // Save is always enabled
+                >
+                  Save
+                </Button>
+                <Button
+                  className="me-2"
+                  variant="secondary"
+                  onClick={async () => {
+                    const row = data[modal.rowIdx];
+                    const response = await fetch('http://localhost:5000/interviews/interview-schedule', {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({
+                        candidate_id: row.candid,
+                        interview_datetime: null,
+                        round_type: modal.round ? modal.round.toUpperCase() : 'L1',
+                        reset: true
+                      })
+                    });
+                    const result = await response.json();
+                    if (result.success) {
+                      fetchCandidates();
+                      setModalDate('');
+                      setModalMeetLink('');
+                      closeModal();
+                    } else {
+                      alert('Failed to reset: ' + result.message);
+                    }
+                  }}
+                >Reset</Button>
+              </div>
+              <div>
+                {modalFeedback.trim() && (
+                  <>
+                    <Button
+                      className="me-2"
+                      variant="success"
+                      onClick={async () => {
+                        const row = data[modal.rowIdx];
+                        // 1. Save feedback to DB for the correct round
+                        let feedbackField = '';
+                        if (modal.round === 'l1') feedbackField = 'l1_feedback';
+                        else if (modal.round === 'l2') feedbackField = 'l2_feedback';
+                        else if (modal.round === 'hr') feedbackField = 'hr_feedback';
+                        // PATCH feedback to DB
+                        await fetch('http://localhost:5000/interviews/interview-schedule', {
+                          method: 'PATCH',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            candidate_id: row.candid,
+                            round_type: modal.round ? modal.round.toUpperCase() : 'L1',
+                            [feedbackField]: modalFeedback
+                          })
+                        });
+                        // 2. Accept the round
+                        const response = await fetch('http://localhost:5000/interviews/candidate-stage', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            candidate_id: row.candid,
+                            stage: modal.round ? modal.round.toUpperCase() : 'L1',
+                            feedback: 'Accepted',
+                            status: 'ACCEPTED'
+                          })
+                        });
+                        const result = await response.json();
+                        if (result.success) {
+                          // 3. If L1, reset assign manager, meet link, and feedback fields in UI for this candidate
+                          if (modal.round === 'l1') {
+                            setData(prev => prev.map((r, i) => i === modal.rowIdx ? {
+                              ...r,
+                              manager: '',
+                              interview_link: '',
+                              // Optionally clear feedback field in UI too
+                            } : r));
+                          }
+                          setModalFeedback('');
+                          fetchCandidates();
+                          closeModal();
+                        } else {
+                          alert('Failed to update status: ' + result.message);
+                        }
+                      }}
+                    >Accept</Button>
+                    <Button
+                      variant="danger"
+                      onClick={async () => {
+                        const row = data[modal.rowIdx];
+                        const response = await fetch('http://localhost:5000/interviews/candidate-stage', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            candidate_id: row.candid,
+                            stage: modal.round ? modal.round.toUpperCase() : 'L1',
+                            feedback: 'Rejected',
+                            status: 'REJECTED'
+                          })
+                        });
+                        const result = await response.json();
+                        if (result.success) {
+                          fetchCandidates();
+                          closeModal();
+                        } else {
+                          alert('Failed to update status: ' + result.message);
+                        }
+                      }}
+                    >Reject</Button>
+                  </>
+                )}
+              </div>
             </div>
             {/* Status and Interview Date */}
             <div className="mb-2">

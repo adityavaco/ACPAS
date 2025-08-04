@@ -10,8 +10,14 @@ import { BsGridFill } from 'react-icons/bs';
 export default function Sidebar({ onReload }) {
   const location = useLocation();
 
-  const linkClass = (path) =>
-    `nav-link px-3 py-2 my-1 d-flex align-items-center sidebar-link ${location.pathname === path ? 'fw-bold active-link' : ''}`;
+  // Highlight Recruitment for all recruitment-related subpages
+  const isRecruitmentActive = location.pathname.startsWith('/recruitment') || location.pathname.startsWith('/step3interview') || location.pathname.startsWith('/step4offerbgv');
+  const linkClass = (path) => {
+    if (path === '/recruitment') {
+      return `nav-link px-3 py-2 my-1 d-flex align-items-center sidebar-link ${isRecruitmentActive ? 'fw-bold active-link' : ''}`;
+    }
+    return `nav-link px-3 py-2 my-1 d-flex align-items-center sidebar-link ${location.pathname === path ? 'fw-bold active-link' : ''}`;
+  };
 
   const [showRecruitmentDropdown, setShowRecruitmentDropdown] = useState(false);
   return (

@@ -1,4 +1,5 @@
 from flask import Blueprint, request
+from flask_cors import cross_origin
 from utility import read_csv_data, generic_json_response
 from models.models import Employee, Candidate, db
 from datetime import datetime
@@ -6,8 +7,8 @@ import secrets
 import string
 from flask import jsonify
 
-interview_bp = Blueprint('api', __name__, url_prefix="/interviews")
 
+interview_bp = Blueprint('api', __name__, url_prefix="/interviews")
 
 
 @interview_bp.route('/fetch-data-from-sheet',methods=['POST'])
@@ -16,7 +17,6 @@ def fetch_data_from_sheet():
         candidate_data = read_csv_data("files/data.csv")
         new_candidates = []
         for data in candidate_data:
-            # Check for existing candidate by job_id and candidate_name
             exists = Candidate.query.filter_by(job_id=data.get("job_id"), candidate_name=data.get("candidate_name")).first()
             if not exists:
                 new_candidates.append(Candidate(**data))
@@ -26,24 +26,78 @@ def fetch_data_from_sheet():
             msg = f"Inserted {len(new_candidates)} new candidates."
         else:
             msg = "No new candidates to insert."
-        return generic_json_response(success=True, 
-                                 status_code=200,
-                                 message = msg)
-    
+        return generic_json_response(success=True, status_code=200, message=msg)
     except Exception as err:
         return generic_json_response(
-                                     success=False,
-                                     status_code = 500,
-                                     message="Internal server error",
-                                     error= str(err) 
-                                     )
+            success=False,
+            status_code=500,
+            message="Internal server error",
+            error=str(err)
+        )
 
 
+@interview_bp.route('/candidate-stage-one', methods=['PATCH'])
+@cross_origin()
+def candidate_stage_one():
+    try:
+        data = request.get_json()
+        candidate_id = data.get('candidate_id')
+        if not candidate_id:
+            return generic_json_response(success=False, status_code=400, message='candidate_id is required')
+        candidate = Candidate.query.get(candidate_id)
+        if not candidate:
+            return generic_json_response(success=False, status_code=404, message='Candidate not found')
+        candidate.stage_one_status = True
+        db.session.commit()
+        return generic_json_response(success=True, status_code=200, message='Stage one status set to true.')
+    except Exception as err:
+        return generic_json_response(
+            success=False,
+            status_code=500,
+            message="Internal server error",
+            error=str(err)
+        )
 
+
+@interview_bp.route('/get-candidates-stageone', methods=['GET'])
+def get_candidates_stageone():
+    try:
+        candidates = Candidate.query.filter_by(stage_one_status=1).order_by(Candidate.updated_on.desc()).all()
+        result = []
+        for candidate in candidates:
+            result.append({
+                "job_id": candidate.job_id,
+                "candidate_id": candidate.candidate_id,
+                "candidate_name": candidate.candidate_name,
+                "l1_interview_date": candidate.l1_date,
+                "l1_status": candidate.l1_status,
+                "l2_interview_date": candidate.l2_date,
+                "l2_status": candidate.l2_status,
+                "hr_interview_date": candidate.hr_date,
+                "hr_status": candidate.hr_status,
+                "manager_assigned": candidate.manager_assigned,
+                "interview_link": candidate.interview_link,
+                "final_average_score": candidate.final_average_score,
+                "final_decision": candidate.final_decision
+            })
+        return generic_json_response(
+            success=True,
+            status_code=200,
+            message="Candidates with stage_one_status=1 fetched successfully.",
+            data=result
+        )
+    except Exception as err:
+        return generic_json_response(
+            success=False,
+            status_code=500,
+            message="Internal server error",
+            error=str(err)
+        )
+    
 @interview_bp.route('/get-candidates', methods = ['GET'])
 def get_candidates():
     try:
-        candidates = Candidate.query.order_by(Candidate.updated_on.desc()).all()
+        candidates = Candidate.query.filter((Candidate.stage_one_status == False) | (Candidate.stage_one_status == None)).order_by(Candidate.updated_on.desc()).all()
         result = []
 
         
@@ -123,29 +177,35 @@ def interview_schedule():
         round_type = round_type.upper()
 
         if reset:
-            # Reset date and status for the round
+            # Reset all relevant fields for the round
             if round_type == "L1":
                 candidate.l1_date = None
                 candidate.l1_status = None
+                candidate.l1_panel = None
+                candidate.l1_feedback = None
+                candidate.manager_assigned = None  # Clear manager on L1 reset
+                candidate.interview_link = None
             elif round_type == "L2":
                 candidate.l2_date = None
                 candidate.l2_status = None
+                candidate.l2_panel = None
+                candidate.l2_feedback = None
             elif round_type == "HR":
                 candidate.hr_date = None
                 candidate.hr_status = None
+                candidate.hr_id = None
+                candidate.hr_feedback = None
             else:
                 return generic_json_response(
                     success=False,
                     status_code=400,
                     message="Invalid interview round type."
                 )
-            # Also clear the interview link when resetting any round
-            candidate.interview_link = None
             db.session.commit()
             return generic_json_response(
                 success=True,
                 status_code=200,
-                message=f"{round_type} interview round reset successfully and meet link cleared."
+                message=f"{round_type} interview round reset successfully and all fields cleared."
             )
 
         # If not reset, proceed as before
@@ -199,13 +259,19 @@ def interview_schedule():
                     message="L1 interview cannot be after L2 is already scheduled."
                 )
 
-        # Update interview date
+        # Update interview date and panel
         if round_type == "L1":
             candidate.l1_date = interview_datetime
+            if 'l1_panel' in data:
+                candidate.l1_panel = data['l1_panel']
         elif round_type == "L2":
             candidate.l2_date = interview_datetime
+            if 'l2_panel' in data:
+                candidate.l2_panel = data['l2_panel']
         elif round_type == "HR":
             candidate.hr_date = interview_datetime
+            if 'hr_panel' in data:
+                candidate.hr_panel = data['hr_panel']
         else:
             return generic_json_response(
                 success=False,

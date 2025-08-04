@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 
-export default function Step4OfferBGV({ onPrev }) {
+export default function Step4OfferBGV() {
+  const navigate = useNavigate();
   const [status, setStatus] = useState({
     offer: null,
     bgv: null,
@@ -84,7 +86,7 @@ export default function Step4OfferBGV({ onPrev }) {
           </tr>
         </tbody>
       </table>
-      <button className="btn btn-secondary" onClick={onPrev}>Previous</button>
+      <button className="btn btn-secondary" onClick={() => navigate(-1)}>Previous</button>
     </div>
   );
 }

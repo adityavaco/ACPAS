@@ -102,6 +102,26 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
     }
   };
 
+  // Accept candidate handler
+  const handleAcceptCandidate = async (candid, index) => {
+    if (!window.confirm('Are you sure you want to accept this candidate?')) return;
+    try {
+      const response = await fetch('http://localhost:5000/interviews/candidate-stage-one', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ candidate_id: candid })
+      });
+      const result = await response.json();
+      if (result.success) {
+        setData(prev => prev.filter((r, i) => i !== index));
+      } else {
+        alert('Failed to accept candidate: ' + result.message);
+      }
+    } catch (err) {
+      alert('Failed to accept candidate: ' + err.message);
+    }
+  };
+
   // Helper for tab color
   const getTabClass = (status, datetime) => {
     if (!datetime) return 'btn-outline-secondary'; // default if not scheduled
@@ -117,7 +137,6 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
 
   return (
     <div>
-      <h3>Recruitment Step 2: Assign Manager</h3>
       {data.length === 0 ? (
         <div className="alert alert-info">
           No candidates found. Please go back to Step 1 and fetch data from sheet.
@@ -131,7 +150,7 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
               <th>Candidate Name</th>
               <th>Interview Status</th>
               <th>Assign Manager</th>
-              <th>Reject Candidate</th>
+              <th>Candidate Final Status</th>
             </tr>
           </thead>
           <tbody>
@@ -185,6 +204,15 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
                   )}
                 </td>
                 <td>
+                  {/* Show Accept button only if all rounds are accepted */}
+                  {row.l1_status === 'accepted' && row.l2_status === 'accepted' && row.hr_status === 'accepted' && (
+                    <button
+                      className="btn btn-outline-success me-2"
+                      onClick={() => handleAcceptCandidate(row.candid, index)}
+                    >
+                      Accept
+                    </button>
+                  )}
                   <button
                     className="btn btn-outline-danger"
                     onClick={() => handleRejectCandidate(row.candid, index)}
@@ -220,7 +248,7 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
               <select
                 className="form-select"
                 value={data[modal.rowIdx]?.manager || ''}
-                onChange={e => handleManagerChange(modal.rowIdx, e.target.value)}
+                onChange={e => setData(prev => prev.map((r, i) => i === modal.rowIdx ? { ...r, manager: e.target.value } : r))}
               >
                 <option value="">Select Manager</option>
                 {managerOptions.map(opt => (
@@ -282,15 +310,20 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
                   onClick={async () => {
                     const row = data[modal.rowIdx];
                     const formattedDatetime = modalDate.replace('T', ' ');
+                    let patchBody = {
+                      candidate_id: row.candid,
+                      interview_datetime: formattedDatetime,
+                      round_type: modal.round ? modal.round.toUpperCase() : 'L1',
+                      feedback: modalFeedback
+                    };
+                    // Map manager to correct panel field
+                    if (modal.round === 'l1') patchBody.l1_panel = row.manager;
+                    else if (modal.round === 'l2') patchBody.l2_panel = row.manager;
+                    else if (modal.round === 'hr') patchBody.hr_panel = row.manager;
                     const response = await fetch('http://localhost:5000/interviews/interview-schedule', {
                       method: 'PATCH',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        candidate_id: row.candid,
-                        interview_datetime: formattedDatetime,
-                        round_type: modal.round ? modal.round.toUpperCase() : 'L1',
-                        feedback: modalFeedback
-                      })
+                      body: JSON.stringify(patchBody)
                     });
                     const result = await response.json();
                     if (result.success) {
@@ -309,21 +342,32 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
                   variant="secondary"
                   onClick={async () => {
                     const row = data[modal.rowIdx];
+                    // Always clear manager and meet link for L1 reset
+                    let patchBody = {
+                      candidate_id: row.candid,
+                      interview_datetime: null,
+                      round_type: modal.round ? modal.round.toUpperCase() : 'L1',
+                      reset: true
+                    };
+                    if (modal.round === 'l1') {
+                      patchBody.manager = '';
+                      patchBody.interview_link = '';
+                    }
                     const response = await fetch('http://localhost:5000/interviews/interview-schedule', {
                       method: 'PATCH',
                       headers: { 'Content-Type': 'application/json' },
-                      body: JSON.stringify({
-                        candidate_id: row.candid,
-                        interview_datetime: null,
-                        round_type: modal.round ? modal.round.toUpperCase() : 'L1',
-                        reset: true
-                      })
+                      body: JSON.stringify(patchBody)
                     });
                     const result = await response.json();
                     if (result.success) {
-                      fetchCandidates();
+                      // Always clear modal fields for L1
+                      if (modal.round === 'l1') {
+                        setModalMeetLink('');
+                      }
                       setModalDate('');
-                      setModalMeetLink('');
+                      setModalFeedback('');
+                      // Wait for fetchCandidates to complete before closing modal
+                      await fetchCandidates();
                       closeModal();
                     } else {
                       alert('Failed to reset: ' + result.message);

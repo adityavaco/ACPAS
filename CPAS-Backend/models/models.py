@@ -62,6 +62,7 @@ class Candidate(db.Model):
     bgv_status = db.Column(db.Integer, default=0)
     loi_status = db.Column(db.Integer, default=0)
     additional_stages = db.Column(db.Integer, default=0)
+    stage_one_status = db.Column(db.Boolean, default=False)  # True if candidate accepted in stage one
     is_active = db.Column(db.Integer, default=1)
     created_on = db.Column(db.DateTime, default=datetime.utcnow)
     updated_on = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)

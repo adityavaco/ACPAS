@@ -4,6 +4,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-d
 import Sidebar from './components/Sidebar';
 import HRDashboard from './components/HRDashboard';
 import Step3Interview from './components/Step3Interview';
+import Step4OfferBGV from './components/Step4OfferBGV';
 import Onboarding from './pages/Onboarding';
 import Offboarding from './pages/Offboarding';
 
@@ -33,6 +34,7 @@ function App() {
             <Route path="/" element={<Navigate to="/recruitment" />} />
             <Route path="/recruitment" element={<HRDashboard reloadKey={reloadKey} />} />
             <Route path="/step3interview" element={<Step3Interview />} />
+            <Route path="/step4offerbgv" element={<Step4OfferBGV />} />
             <Route path="/onboarding" element={<Onboarding />} />
             <Route path="/offboarding" element={<Offboarding />} />
           </Routes>

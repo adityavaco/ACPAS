@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './StarRating.css'; // optional for better star style
 
@@ -7,8 +7,6 @@ export default function Step3Interview() {
   const [popup, setPopup] = useState(null);
   const [selection, setSelection] = useState("");
   const [statusColor, setStatusColor] = useState("");
-
-
   const [feedbacks, setFeedbacks] = useState({});
   const [jdRatings, setJdRatings] = useState({
     experience: 0,
@@ -18,6 +16,27 @@ export default function Step3Interview() {
     aptitude: 0,
     decision: null
   });
+  const [candidates, setCandidates] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchCandidates = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch('http://localhost:5000/interviews/get-candidates-stageone');
+        const result = await res.json();
+        if (result.success && Array.isArray(result.data)) {
+          setCandidates(result.data);
+        } else {
+          setCandidates([]);
+        }
+      } catch (err) {
+        setCandidates([]);
+      }
+      setLoading(false);
+    };
+    fetchCandidates();
+  }, []);
 
   const openPopup = (stage) => {
     setPopup(stage);
@@ -59,17 +78,46 @@ export default function Step3Interview() {
     closePopup();
   };*/
 
-  const handleSubmit = (stage) => {
-  if (stage !== "JD") {
-    if (selection === "Selected") {
-      setStatusColor("green");
+  const handleSubmit = async (stage) => {
+    if (stage === "JD") {
+      // Find the candidate for which the popup is open
+      const candidate = candidates[0];
+      if (!candidate) return closePopup();
+      const avgScore = parseFloat(calculateAverage());
+      const decision = jdRatings.decision;
+      // Use a non-empty feedback string for backend validation
+      const feedback = `JD Evaluation: Avg Score ${avgScore}`;
+      try {
+        const response = await fetch('http://localhost:5000/interviews/candidate-stage', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            candidate_id: candidate.candidate_id,
+            stage: 'JD',
+            status: decision,
+            final_average_score: avgScore,
+            feedback
+          })
+        });
+        const result = await response.json();
+        if (result.success) {
+          alert('JD evaluation submitted successfully!');
+          closePopup();
+        } else {
+          alert('Failed to submit JD evaluation: ' + result.message);
+        }
+      } catch (err) {
+        alert('Failed to submit JD evaluation: ' + err.message);
+      }
     } else {
-      setStatusColor("red");
+      if (selection === "Selected") {
+        setStatusColor("green");
+      } else {
+        setStatusColor("red");
+      }
+      closePopup();
     }
-    closePopup();
-  }
-}
-
+  };
 
   const handleStarRating = (criteria, value) => {
     setJdRatings(prev => ({
@@ -124,57 +172,37 @@ export default function Step3Interview() {
           Interview Progress Tracker
         </div>
         <div className="card-body bg-light">
-          <h3>Recruitment Step 3: Interview</h3>
           <table className="table table-bordered">
             <thead>
               <tr>
                 <th>Candid</th>
                 <th>Candidate Name</th>
                 <th>Interview Date & Time</th>
-                <th>GMeet Link</th>
-                <th>Status</th>
+                <th>JD Status</th>
               </tr>
             </thead>
             <tbody>
-              <tr className={getRowColor()}>
-                <td>CAN002</td>
-                <td>Jane Smith</td>
-                <td>2025-07-25, 10:00 AM</td>
-                <td>
-                  <button
-                    className="btn btn-outline-success"
-                    onClick={async () => {
-                      try {
-                        const res = await fetch('http://localhost:5000/interviews/generate-meeting-link', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' }
-                        });
-                        const data = await res.json();
-                        if (data.success && data.meeting_url) {
-                          window.open(data.meeting_url, '_blank');
-                        } else {
-                          alert('Failed to generate meeting link');
-                        }
-                      } catch (err) {
-                        alert('Error generating meeting link');
-                      }
-                    }}
-                  >
-                    Generate Link
-                  </button>
-                </td>
-                <td>
-                  {['L1', 'L2', 'HR', 'JD'].map(stage => (
-                    <button
-                      className={`btn btn-sm m-1 ${getColorClass(stage)}`}
-                      key={stage}
-                      onClick={() => openPopup(stage)}
-                    >
-                      {stage}
-                    </button>
-                  ))}
-                </td>
-              </tr>
+              {loading ? (
+                <tr><td colSpan={4}>Loading...</td></tr>
+              ) : candidates.length === 0 ? (
+                <tr><td colSpan={4}>No candidates found.</td></tr>
+              ) : (
+                candidates.map((row, idx) => (
+                  <tr key={row.candidate_id} className={getRowColor()}>
+                    <td>{row.candidate_id}</td>
+                    <td>{row.candidate_name}</td>
+                    <td>{row.l1_interview_date ? new Date(row.l1_interview_date).toLocaleString() : ''}</td>
+                    <td>
+                      <button
+                        className={`btn btn-sm m-1 ${getColorClass('JD')}`}
+                        onClick={() => openPopup('JD')}
+                      >
+                        JD
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
           <div className="d-flex justify-content-between mt-3">
@@ -268,3 +296,4 @@ export default function Step3Interview() {
     </div>
   );
 }
+

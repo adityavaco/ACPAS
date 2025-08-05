@@ -5,3 +5,4 @@
 /node_modules
 /myvenv
 **/__pycache__/
+/instance/cpas_database.db

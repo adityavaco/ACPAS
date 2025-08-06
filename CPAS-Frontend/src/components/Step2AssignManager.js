@@ -30,10 +30,13 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
             name: c.candidate_name,
             l1_datetime: c.l1_interview_date || '',
             l1_status: (c.l1_status || 'pending').toLowerCase(),
+            l1_feedback_status: c.l1_feedback_status ? c.l1_feedback_status.toLowerCase() : null,
             l2_datetime: c.l2_interview_date || '',
-            l2_status: (c.l2_status || 'not_available').toLowerCase(),
+            l2_status: c.l2_interview_date ? (c.l2_status || 'pending').toLowerCase() : 'not_available',
+            l2_feedback_status: c.l2_feedback_status ? c.l2_feedback_status.toLowerCase() : null,
             hr_datetime: c.hr_interview_date || '',
             hr_status: (c.hr_status || 'not_available').toLowerCase(),
+            hr_feedback_status: (c.hr_feedback_status || '').toLowerCase(),
             manager: c.manager_assigned || '',
             interview_link: c.interview_link || ''
           }));
@@ -66,13 +69,24 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
     setFeedbackText('');
     setFeedbackStatus('selected');
   };
+  // L2 Interview Modal state
+  const [l2Modal, setL2Modal] = useState({ show: false, rowIdx: null });
+  const [hrModal, setHRModal] = useState({ show: false, rowIdx: null });
+
   const openModal = (rowIdx, round, mode = 'schedule') => {
-    setModal({ show: true, rowIdx, round, mode });
-    if (mode === 'schedule') {
-      setModalDate(data[rowIdx][`${round}_datetime`] || '');
+    if (round === 'l2') {
+      setL2Modal({ show: true, rowIdx });
+      setModalDate(data[rowIdx].l2_datetime || '');
+    } else if (round === 'hr') {
+      setHRModal({ show: true, rowIdx });
+      setModalDate(data[rowIdx].hr_datetime || '');
+    } else {
+      setModal({ show: true, rowIdx, round, mode });
+      if (mode === 'schedule') {
+        setModalDate(data[rowIdx][`${round}_datetime`] || '');
+      }
+      setModalMeetLink(data[rowIdx]?.interview_link || '');
     }
-    // Always set the meet link field to the current value from data (even if modalMeetLink was changed previously)
-    setModalMeetLink(data[rowIdx]?.interview_link || '');
   };
   const closeModal = () => {
     setModal({ show: false, rowIdx: null, round: null, mode: 'schedule' });
@@ -151,16 +165,22 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
 
   // Accept candidate handler
   const handleAcceptCandidate = async (candid, index) => {
-    if (!window.confirm('Are you sure you want to accept this candidate?')) return;
+    if (!window.confirm('Are you sure you want to accept this candidate for offer and BGV stage?')) return;
     try {
+      // First update the stage_one_status
       const response = await fetch('http://localhost:5000/interviews/candidate-stage-one', {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ candidate_id: candid })
+        body: JSON.stringify({ 
+          candidate_id: candid,
+          stage_one_status: true  // Set stage_one_status to true
+        })
       });
       const result = await response.json();
       if (result.success) {
         setData(prev => prev.filter((r, i) => i !== index));
+        // Automatically navigate to offer/BGV page after successful approval
+        navigate('/step4offerbgv');
       } else {
         alert('Failed to accept candidate: ' + result.message);
       }
@@ -172,7 +192,7 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
   // Helper for tab color
   const getTabClass = (status, datetime) => {
     if (!datetime) return 'btn-outline-secondary'; // default if not scheduled
-    if (status === 'pending') return 'bg-warning text-dark';
+    if (status === 'pending' || status === 'not_available') return 'bg-warning text-dark';
     if (status === 'accepted' || status === 'selected') return 'bg-success text-white';
     if (status === 'rejected') return 'bg-danger text-white';
     return 'bg-secondary text-white';
@@ -186,7 +206,7 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
     <div>
       {data.length === 0 ? (
         <div className="alert alert-info">
-          No candidates found. Please go back to Step 1 and fetch data from sheet.
+          No candidates found.
         </div>
       ) : (
         <table className="table table-bordered">
@@ -212,63 +232,69 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
                     <button
                       className={`btn btn-sm ${getTabClass(row.l1_status, row.l1_datetime)}`}
                       onClick={() => openModal(index, 'l1', row.l1_datetime ? 'status' : 'schedule')}
+                      disabled={row.l1_feedback_status === 'rejected'} // Only disable if L1 feedback is rejected
                     >
                       L1
                     </button>
                     <button
                       className={`btn btn-sm ${getTabClass(row.l2_status, row.l2_datetime)}`}
-                      disabled={row.l1_status !== 'accepted'}
-                      onClick={row.l1_status === 'accepted' ? () => openModal(index, 'l2', row.l2_datetime ? 'status' : 'schedule') : undefined}
+                      disabled={
+                        !row.l1_datetime || // Need L1 interview scheduled
+                        !row.l1_feedback_status || // Need L1 feedback to be given
+                        row.l1_feedback_status !== 'selected' || // Need L1 feedback to be selected
+                        row.l2_feedback_status === 'rejected' // Disable if L2 is rejected
+                      }
+                      onClick={() => openModal(index, 'l2', row.l2_datetime ? 'status' : 'schedule')}
                     >
                       L2
                     </button>
                     <button
                       className={`btn btn-sm ${getTabClass(row.hr_status, row.hr_datetime)}`}
-                      disabled={row.l2_status !== 'accepted'}
-                      onClick={row.l2_status === 'accepted' ? () => openModal(index, 'hr', row.hr_datetime ? 'status' : 'schedule') : undefined}
+                      disabled={
+                        !row.l2_datetime || // Need L2 interview scheduled
+                        !row.l2_feedback_status || // Need L2 feedback given
+                        row.l2_feedback_status !== 'selected' // Need L2 feedback to be selected
+                      }
+                      onClick={() => openModal(index, 'hr', row.hr_datetime ? 'status' : 'schedule')}
                     >
                       HR
                     </button>
                   </div>
-                  {/* Show scheduled date/time for each round */}
-                  {row.l1_datetime && (
-                    <div className="mb-1"><small>L1: {new Date(row.l1_datetime).toLocaleString()}</small></div>
-                  )}
-                  {row.l2_datetime && (
-                    <div className="mb-1"><small>L2: {new Date(row.l2_datetime).toLocaleString()}</small></div>
-                  )}
-                  {row.hr_datetime && (
-                    <div className="mb-1"><small>HR: {new Date(row.hr_datetime).toLocaleString()}</small></div>
-                  )}
+                  
                 </td>
                 
                 <td id="feedback">
                   <div className="d-flex gap-2 mb-2">
                     <button
-                      className={`btn btn-sm ${getTabClass(row.l1_feedback_status, row.l1_datetime)}`}
+                      className={`btn btn-sm ${getTabClass(row.l1_feedback_status || row.l1_status, row.l1_datetime)}`}
                       onClick={() => openFeedbackModal(index, 'l1')}
                       disabled={
-                        !row.l1_datetime ||
-                        row.l2_datetime // Disable L1 feedback if L2 interview is scheduled
+                        !row.l1_datetime || // Need L1 interview scheduled
+                        row.l1_feedback_status !== null // Only enable if no feedback given yet
                       }
                     >
                       L1
                     </button>
                     <button
-                      className={`btn btn-sm ${getTabClass(row.l2_feedback_status, row.l2_datetime)}`}
+                      className={`btn btn-sm ${getTabClass(row.l2_feedback_status || row.l2_status, row.l2_datetime)}`}
                       onClick={() => openFeedbackModal(index, 'l2')}
                       disabled={
-                        row.l1_status !== 'accepted' ||
-                        !row.l2_datetime ||
-                        row.l2_status === 'rejected' // Only disable if rejected
+                        !row.l2_datetime || // Need L2 interview scheduled
+                        row.l1_feedback_status !== 'selected' || // Need L1 feedback to be selected
+                        row.l2_feedback_status !== null // Only enable if no feedback given yet
                       }
                     >
                       L2
                     </button>
                     <button
-                      className={`btn btn-sm ${getTabClass(row.hr_feedback_status, row.hr_datetime)}`}
+                      className={`btn btn-sm ${getTabClass(row.hr_feedback_status || row.hr_status, row.hr_datetime)}`}
                       onClick={() => openFeedbackModal(index, 'hr')}
-                      disabled={row.l2_status !== 'accepted' || !row.hr_datetime}
+                      disabled={
+                        !row.hr_datetime || // Need HR interview scheduled
+                        !row.l2_feedback_status || // Need L2 feedback first
+                        row.l2_feedback_status === 'rejected' || // Can't proceed if L2 rejected
+                        row.hr_feedback_status // Can't give feedback if already given
+                      }
                     >
                       HR
                     </button>
@@ -344,22 +370,15 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
           >Submit</Button>
         </Modal.Body>
       </Modal>
-                  {/* Show scheduled date/time for each round */}
-                  {row.l1_datetime && (
-                    <div className="mb-1"><small>L1: {new Date(row.l1_datetime).toLocaleString()}</small></div>
-                  )}
-                  {row.l2_datetime && (
-                    <div className="mb-1"><small>L2: {new Date(row.l2_datetime).toLocaleString()}</small></div>
-                  )}
-                  {row.hr_datetime && (
-                    <div className="mb-1"><small>HR: {new Date(row.hr_datetime).toLocaleString()}</small></div>
-                  )}
+                  
                 </td>
 
                 {/* Feedback column: input for L1 feedback only, can be extended for L2/HR if needed */}
                 <td>
-                  {/* Show Accept button only if all rounds are accepted */}
-                  {row.l1_status === 'accepted' && row.l2_status === 'accepted' && row.hr_status === 'accepted' && (
+                  {/* Show Accept button only if all rounds have selected feedback */}
+                  {row.l1_feedback_status === 'selected' && 
+                   row.l2_feedback_status === 'selected' && 
+                   row.hr_feedback_status === 'selected' && (
                     <button
                       className="btn btn-outline-success me-2"
                       onClick={() => handleAcceptCandidate(row.candid, index)}
@@ -477,10 +496,24 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
                     let patchBody = {
                       candidate_id: row.candid,
                       interview_datetime: formattedDatetime,
-                      round_type: modal.round ? modal.round.toUpperCase() : 'L1',
-                      feedback: modalFeedback
+                      round_type: modal.round ? modal.round.toUpperCase() : 'L1'
                     };
-                    // No manager assignment logic
+
+                    // Add initial status for each round
+                    if (modal.round === 'l1') {
+                      patchBody.l1_status = 'pending';
+                    } else if (modal.round === 'l2') {
+                      patchBody.l2_status = 'pending';
+                      // Clear any existing L2 feedback when rescheduling
+                      patchBody.l2_feedback = '';
+                      patchBody.l2_feedback_status = '';
+                    } else if (modal.round === 'hr') {
+                      patchBody.hr_status = 'pending';
+                      // Clear any existing HR feedback when rescheduling
+                      patchBody.hr_feedback = '';
+                      patchBody.hr_feedback_status = '';
+                    }
+
                     const response = await fetch('http://localhost:5000/interviews/interview-schedule', {
                       method: 'PATCH',
                       headers: { 'Content-Type': 'application/json' },
@@ -488,7 +521,16 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
                     });
                     const result = await response.json();
                     if (result.success) {
-                      fetchCandidates();
+                      // Update local state before fetching
+                      setData(prev => prev.map((r, i) => {
+                        if (i !== modal.rowIdx) return r;
+                        return {
+                          ...r,
+                          [`${modal.round}_datetime`]: formattedDatetime,
+                          [`${modal.round}_status`]: 'pending'
+                        };
+                      }));
+                      await fetchCandidates();
                       closeModal();
                     } else {
                       alert('Failed to schedule: ' + result.message);
@@ -629,12 +671,278 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
           </div>
         </Modal.Body>
       </Modal>
+
+      {/* L2 Interview Modal */}
+      <Modal show={l2Modal.show} onHide={() => setL2Modal({ show: false, rowIdx: null })} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>L2 Interview</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <div>
+            <label className="form-label">L2 Interview Date & Time</label>
+            <input
+              type="datetime-local"
+              className="form-control mb-3"
+              value={modalDate}
+              onChange={e => setModalDate(e.target.value)}
+            />
+
+            {/* L2 Interviewer Selection */}
+            <div className="mb-3">
+              <label className="form-label">L2 Interviewer</label>
+              <select
+                className="form-select"
+                value={l2Modal.rowIdx !== null ? data[l2Modal.rowIdx]?.l2_panel || '' : ''}
+                onChange={e => handleManagerChange(l2Modal.rowIdx, e.target.value, 'l2')}
+                disabled={!modalDate}
+              >
+                <option value="">Select L2 Interviewer</option>
+                {managerOptions.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+              {!modalDate && (
+                <div className="mt-2 text-danger">
+                  <small>Select interview date before assigning interviewer.</small>
+                </div>
+              )}
+            </div>
+
+            {/* L2 Interview Status */}
+            {l2Modal.rowIdx !== null && (
+              <div className="alert alert-info">
+                <div>L1 Status: <strong>{data[l2Modal.rowIdx]?.l1_status?.toUpperCase() || 'N/A'}</strong></div>
+                <div>L1 Feedback: <strong>{data[l2Modal.rowIdx]?.l1_feedback_status?.toUpperCase() || 'N/A'}</strong></div>
+              </div>
+            )}
+
+            {/* Generate Meet Link for L2 */}
+            <div className="mb-3 d-flex align-items-center gap-2">
+              <input
+                type="text"
+                className="form-control"
+                style={{ flex: 1 }}
+                value={data[l2Modal.rowIdx]?.interview_link || ''}
+                readOnly
+                placeholder="Meet link will appear here"
+              />
+              <Button
+                variant="info"
+                style={{ whiteSpace: 'nowrap' }}
+                onClick={async () => {
+                  const row = data[l2Modal.rowIdx];
+                  const response = await fetch('http://localhost:5000/interviews/generate-meeting-link', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ candidate_id: row.candid })
+                  });
+                  const result = await response.json();
+                  if (result.success && result.meeting_url) {
+                    setData(prev => prev.map((r, i) => i === l2Modal.rowIdx ? { ...r, interview_link: result.meeting_url } : r));
+                  } else {
+                    alert('Failed to generate meet link: ' + result.message);
+                  }
+                }}
+              >Generate Meet Link</Button>
+            </div>
+
+            <div className="d-flex gap-2 mb-3">
+              <Button
+                variant="primary"
+                onClick={async () => {
+                  const row = data[l2Modal.rowIdx];
+                  const formattedDatetime = modalDate.replace('T', ' ');
+                  const response = await fetch('http://localhost:5000/interviews/interview-schedule', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      candidate_id: row.candid,
+                      interview_datetime: formattedDatetime,
+                      round_type: 'L2',
+                      l2_status: 'pending',
+                      l2_feedback: '',
+                      l2_feedback_status: ''
+                    })
+                  });
+                  const result = await response.json();
+                  if (result.success) {
+                    setData(prev => prev.map((r, i) => {
+                      if (i !== l2Modal.rowIdx) return r;
+                      return {
+                        ...r,
+                        l2_datetime: formattedDatetime,
+                        l2_status: 'pending',
+                        l2_feedback: '',
+                        l2_feedback_status: null
+                      };
+                    }));
+                    setL2Modal({ show: false, rowIdx: null });
+                  } else {
+                    alert('Failed to schedule L2 interview: ' + result.message);
+                  }
+                }}
+              >
+                Save
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => setL2Modal({ show: false, rowIdx: null })}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </Modal.Body>
+      </Modal>
+
+      {/* HR Interview Modal */}
+      <Modal show={hrModal.show} onHide={() => setHRModal({ show: false, rowIdx: null })} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>HR Interview</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <div>
+            <label className="form-label">HR Interview Date & Time</label>
+            <input
+              type="datetime-local"
+              className="form-control mb-3"
+              value={modalDate}
+              onChange={e => setModalDate(e.target.value)}
+            />
+
+            {/* HR Interviewer Selection */}
+            <div className="mb-3">
+              <label className="form-label">HR Interviewer</label>
+              <select
+                className="form-select"
+                value={hrModal.rowIdx !== null ? data[hrModal.rowIdx]?.hr_panel || '' : ''}
+                onChange={e => handleManagerChange(hrModal.rowIdx, e.target.value, 'hr')}
+                disabled={!modalDate}
+              >
+                <option value="">Select HR Interviewer</option>
+                {managerOptions.map(opt => (
+                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                ))}
+              </select>
+              {!modalDate && (
+                <div className="mt-2 text-danger">
+                  <small>Select interview date before assigning interviewer.</small>
+                </div>
+              )}
+            </div>
+
+            {/* Previous Interview Status */}
+            {hrModal.rowIdx !== null && (
+              <div className="alert alert-info">
+                <div>L2 Status: <strong>{data[hrModal.rowIdx]?.l2_status?.toUpperCase() || 'N/A'}</strong></div>
+                <div>L2 Feedback: <strong>{data[hrModal.rowIdx]?.l2_feedback_status?.toUpperCase() || 'N/A'}</strong></div>
+              </div>
+            )}
+
+            {/* Generate Meet Link for HR */}
+            <div className="mb-3 d-flex align-items-center gap-2">
+              <input
+                type="text"
+                className="form-control"
+                style={{ flex: 1 }}
+                value={data[hrModal.rowIdx]?.interview_link || ''}
+                readOnly
+                placeholder="Meet link will appear here"
+              />
+              <Button
+                variant="info"
+                style={{ whiteSpace: 'nowrap' }}
+                onClick={async () => {
+                  const row = data[hrModal.rowIdx];
+                  const response = await fetch('http://localhost:5000/interviews/generate-meeting-link', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ candidate_id: row.candid })
+                  });
+                  const result = await response.json();
+                  if (result.success && result.meeting_url) {
+                    setData(prev => prev.map((r, i) => i === hrModal.rowIdx ? { ...r, interview_link: result.meeting_url } : r));
+                  } else {
+                    alert('Failed to generate meet link: ' + result.message);
+                  }
+                }}
+              >Generate Meet Link</Button>
+            </div>
+
+            <div className="d-flex gap-2 mb-3">
+              <Button
+                variant="primary"
+                onClick={async () => {
+                  const row = data[hrModal.rowIdx];
+                  const formattedDatetime = modalDate.replace('T', ' ');
+                  const response = await fetch('http://localhost:5000/interviews/interview-schedule', {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      candidate_id: row.candid,
+                      interview_datetime: formattedDatetime,
+                      round_type: 'HR',
+                      hr_status: 'pending',
+                      hr_feedback: '',
+                      hr_feedback_status: ''
+                    })
+                  });
+                  const result = await response.json();
+                  if (result.success) {
+                    setData(prev => prev.map((r, i) => {
+                      if (i !== hrModal.rowIdx) return r;
+                      return {
+                        ...r,
+                        hr_datetime: formattedDatetime,
+                        hr_status: 'pending',
+                        hr_feedback: '',
+                        hr_feedback_status: null
+                      };
+                    }));
+                    setHRModal({ show: false, rowIdx: null });
+                  } else {
+                    alert('Failed to schedule HR interview: ' + result.message);
+                  }
+                }}
+              >
+                Save
+              </Button>
+              <Button
+                variant="secondary"
+                onClick={() => setHRModal({ show: false, rowIdx: null })}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </Modal.Body>
+      </Modal>
+
       <div className="d-flex justify-content-end mt-4">
-        <Button variant="primary" onClick={() => {
-          if (onNext) {
-            onNext();
-          } else {
-            navigate('/step3interview');
+        <Button variant="primary" onClick={async () => {
+          // Check if there are any candidates with stage_one_status = true
+          try {
+            const response = await fetch('http://localhost:5000/interviews/check-stage-one-status');
+            const result = await response.json();
+            
+            if (result.success) {
+              // If there are candidates with stage_one_status = true, go to offer/BGV page
+              if (result.hasStageOneApproved) {
+                navigate('/step4offerbgv');
+              } else {
+                // Otherwise, proceed to next interview stage
+                if (onNext) {
+                  onNext();
+                } else {
+                  navigate('/step3interview');
+                }
+              }
+            } else {
+              alert('Error checking stage status: ' + result.message);
+            }
+          } catch (err) {
+            console.error('Error checking stage status:', err);
+            alert('Error checking stage status. Please try again.');
           }
         }}>
           Next

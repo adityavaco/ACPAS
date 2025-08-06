@@ -16,6 +16,7 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
   const [modalDate, setModalDate] = useState('');
   const [modalMeetLink, setModalMeetLink] = useState('');
   const [modalFeedback, setModalFeedback] = useState('');
+  const [linkCopied, setLinkCopied] = useState(false);
 
   // Always fetch fresh data from backend (don't rely on localStorage for candidate data)
   const fetchCandidates = () => {
@@ -454,52 +455,83 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
               )}
             </div>
 
-            {/* Generate Meet Link field and button side by side */}
-            <div className="mb-3 d-flex align-items-center gap-2">
-              <input
-                type="text"
-                className="form-control"
-                style={{ flex: 1 }}
-                value={data[modal.rowIdx]?.interview_link || ''}
-                readOnly
-                placeholder="Meet link will appear here"
-              />
-              <Button
-                variant="info"
-                style={{ whiteSpace: 'nowrap' }}
-                onClick={async () => {
-                  const row = data[modal.rowIdx];
-                  const response = await fetch('http://localhost:5000/interviews/generate-meeting-link', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ candidate_id: row.candid })
-                  });
-                  const result = await response.json();
-                  if (result.success && result.meeting_url) {
-                    setData(prev => prev.map((r, i) => i === modal.rowIdx ? { ...r, interview_link: result.meeting_url } : r));
-                  } else {
-                    alert('Failed to generate meet link: ' + result.message);
-                  }
-                }}
-              >Generate Meet Link</Button>
+            {/* Meeting Link field with copy button */}
+            <div className="mb-3">
+              <label className="form-label">Meeting Link</label>
+              <div>
+                <div className="input-group">
+                  <input
+                    type="text"
+                    className="form-control"
+                    style={{
+                      cursor: data[modal.rowIdx]?.interview_link ? 'pointer' : 'default',
+                      backgroundColor: data[modal.rowIdx]?.interview_link ? '#f8f9fa' : '#fff'
+                    }}
+                    value={data[modal.rowIdx]?.interview_link || ''}
+                    readOnly
+                    placeholder="Click Generate Link button to create a meeting link"
+                    onClick={() => {
+                      const link = data[modal.rowIdx]?.interview_link;
+                      if (link) {
+                        navigator.clipboard.writeText(link);
+                        setLinkCopied(true);
+                        setTimeout(() => setLinkCopied(false), 2000);
+                      }
+                    }}
+                    title={data[modal.rowIdx]?.interview_link ? "Click to copy link" : ""}
+                  />
+                  <Button 
+                    onClick={async () => {
+                      const row = data[modal.rowIdx];
+                      const response = await fetch('http://localhost:5000/interviews/generate-meeting-link', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ candidate_id: row.candid })
+                      });
+                      const result = await response.json();
+                      if (result.success) {
+                        setData(prev => prev.map((r, i) => 
+                          i === modal.rowIdx ? { ...r, interview_link: result.meeting_url } : r
+                        ));
+                      }
+                    }}
+                  >
+                    Generate Link
+                  </Button>
+                </div>
+                {data[modal.rowIdx]?.interview_link && (
+                  <div className="text-muted mt-1" style={{ fontSize: '0.875em' }}>
+                    <small>{linkCopied ? "✓ Link copied to clipboard!" : "👆 Click on the link to copy to clipboard"}</small>
+                  </div>
+                )}
+              </div>
             </div>
       {/* Feedback input removed from modal, now in table column */}
             {/* Action buttons row */}
             <div className="d-flex gap-2 mb-3 justify-content-between">
               <div>
-                <Button
+                  <Button
                   className="me-2"
                   variant="primary"
                   onClick={async () => {
                     const row = data[modal.rowIdx];
                     const formattedDatetime = modalDate.replace('T', ' ');
+                    
+                    // First generate the meeting link
+                    const meetingResponse = await fetch('http://localhost:5000/interviews/generate-meeting-link', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ candidate_id: row.candid })
+                    });
+                    const meetingResult = await meetingResponse.json();
+                    const meetingUrl = meetingResult.success ? meetingResult.meeting_url : '';
+                    
                     let patchBody = {
                       candidate_id: row.candid,
                       interview_datetime: formattedDatetime,
-                      round_type: modal.round ? modal.round.toUpperCase() : 'L1'
-                    };
-
-                    // Add initial status for each round
+                      round_type: modal.round ? modal.round.toUpperCase() : 'L1',
+                      interview_link: meetingUrl
+                    };                    // Add initial status for each round
                     if (modal.round === 'l1') {
                       patchBody.l1_status = 'pending';
                     } else if (modal.round === 'l2') {
@@ -716,34 +748,56 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
               </div>
             )}
 
-            {/* Generate Meet Link for L2 */}
-            <div className="mb-3 d-flex align-items-center gap-2">
-              <input
-                type="text"
-                className="form-control"
-                style={{ flex: 1 }}
-                value={data[l2Modal.rowIdx]?.interview_link || ''}
-                readOnly
-                placeholder="Meet link will appear here"
-              />
-              <Button
-                variant="info"
-                style={{ whiteSpace: 'nowrap' }}
-                onClick={async () => {
-                  const row = data[l2Modal.rowIdx];
-                  const response = await fetch('http://localhost:5000/interviews/generate-meeting-link', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ candidate_id: row.candid })
-                  });
-                  const result = await response.json();
-                  if (result.success && result.meeting_url) {
-                    setData(prev => prev.map((r, i) => i === l2Modal.rowIdx ? { ...r, interview_link: result.meeting_url } : r));
-                  } else {
-                    alert('Failed to generate meet link: ' + result.message);
-                  }
-                }}
-              >Generate Meet Link</Button>
+            {/* Meeting Link field with copy button for L2 */}
+            <div className="mb-3">
+              <label className="form-label">Meeting Link</label>
+              <div>
+                <div className="input-group">
+                  <input
+                    type="text"
+                    className="form-control"
+                    style={{
+                      cursor: data[l2Modal.rowIdx]?.interview_link ? 'pointer' : 'default',
+                      backgroundColor: data[l2Modal.rowIdx]?.interview_link ? '#f8f9fa' : '#fff'
+                    }}
+                    value={data[l2Modal.rowIdx]?.interview_link || ''}
+                    readOnly
+                    placeholder="Click Generate Link button to create a meeting link"
+                    onClick={() => {
+                      const link = data[l2Modal.rowIdx]?.interview_link;
+                      if (link) {
+                        navigator.clipboard.writeText(link);
+                        setLinkCopied(true);
+                        setTimeout(() => setLinkCopied(false), 2000);
+                      }
+                    }}
+                    title={data[l2Modal.rowIdx]?.interview_link ? "Click to copy link" : ""}
+                  />
+                  <Button 
+                    onClick={async () => {
+                      const row = data[l2Modal.rowIdx];
+                      const response = await fetch('http://localhost:5000/interviews/generate-meeting-link', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ candidate_id: row.candid })
+                      });
+                      const result = await response.json();
+                      if (result.success) {
+                        setData(prev => prev.map((r, i) => 
+                          i === l2Modal.rowIdx ? { ...r, interview_link: result.meeting_url } : r
+                        ));
+                      }
+                    }}
+                  >
+                    Generate Link
+                  </Button>
+                </div>
+                {data[l2Modal.rowIdx]?.interview_link && (
+                  <div className="text-muted mt-1" style={{ fontSize: '0.875em' }}>
+                    <small>{linkCopied ? "✓ Link copied to clipboard!" : "👆 Click on the link to copy to clipboard"}</small>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="d-flex gap-2 mb-3">
@@ -839,34 +893,56 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
               </div>
             )}
 
-            {/* Generate Meet Link for HR */}
-            <div className="mb-3 d-flex align-items-center gap-2">
-              <input
-                type="text"
-                className="form-control"
-                style={{ flex: 1 }}
-                value={data[hrModal.rowIdx]?.interview_link || ''}
-                readOnly
-                placeholder="Meet link will appear here"
-              />
-              <Button
-                variant="info"
-                style={{ whiteSpace: 'nowrap' }}
-                onClick={async () => {
-                  const row = data[hrModal.rowIdx];
-                  const response = await fetch('http://localhost:5000/interviews/generate-meeting-link', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ candidate_id: row.candid })
-                  });
-                  const result = await response.json();
-                  if (result.success && result.meeting_url) {
-                    setData(prev => prev.map((r, i) => i === hrModal.rowIdx ? { ...r, interview_link: result.meeting_url } : r));
-                  } else {
-                    alert('Failed to generate meet link: ' + result.message);
-                  }
-                }}
-              >Generate Meet Link</Button>
+            {/* Meeting Link field with copy button for HR */}
+            <div className="mb-3">
+              <label className="form-label">Meeting Link</label>
+              <div>
+                <div className="input-group">
+                  <input
+                    type="text"
+                    className="form-control"
+                    style={{
+                      cursor: data[hrModal.rowIdx]?.interview_link ? 'pointer' : 'default',
+                      backgroundColor: data[hrModal.rowIdx]?.interview_link ? '#f8f9fa' : '#fff'
+                    }}
+                    value={data[hrModal.rowIdx]?.interview_link || ''}
+                    readOnly
+                    placeholder="Click Generate Link button to create a meeting link"
+                    onClick={() => {
+                      const link = data[hrModal.rowIdx]?.interview_link;
+                      if (link) {
+                        navigator.clipboard.writeText(link);
+                        setLinkCopied(true);
+                        setTimeout(() => setLinkCopied(false), 2000);
+                      }
+                    }}
+                    title={data[hrModal.rowIdx]?.interview_link ? "Click to copy link" : ""}
+                  />
+                  <Button 
+                    onClick={async () => {
+                      const row = data[hrModal.rowIdx];
+                      const response = await fetch('http://localhost:5000/interviews/generate-meeting-link', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ candidate_id: row.candid })
+                      });
+                      const result = await response.json();
+                      if (result.success) {
+                        setData(prev => prev.map((r, i) => 
+                          i === hrModal.rowIdx ? { ...r, interview_link: result.meeting_url } : r
+                        ));
+                      }
+                    }}
+                  >
+                    Generate Link
+                  </Button>
+                </div>
+                {data[hrModal.rowIdx]?.interview_link && (
+                  <div className="text-muted mt-1" style={{ fontSize: '0.875em' }}>
+                    <small>{linkCopied ? "✓ Link copied to clipboard!" : "👆 Click on the link to copy to clipboard"}</small>
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="d-flex gap-2 mb-3">

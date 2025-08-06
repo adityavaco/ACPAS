@@ -52,6 +52,7 @@ class Candidate(db.Model):
     l2_date = db.Column(db.DateTime)  
     l2_feedback = db.Column(db.String)
     l2_status = db.Column(db.String)
+    hr_panel = db.Column(db.String)  # HR panel members
     hr_date = db.Column(db.DateTime)
     hr_feedback = db.Column(db.Text)
     hr_status = db.Column(db.String(20)) #avg scoring column ko add kiya hai

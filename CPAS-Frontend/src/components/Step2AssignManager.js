@@ -4,6 +4,10 @@ import Modal from 'react-bootstrap/Modal';
 import Button from 'react-bootstrap/Button';
 
 export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
+  // Feedback modal state
+  const [feedbackModal, setFeedbackModal] = useState({ show: false, rowIdx: null, round: null });
+  const [feedbackText, setFeedbackText] = useState('');
+  const [feedbackStatus, setFeedbackStatus] = useState('selected');
   const navigate = useNavigate();
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -51,6 +55,17 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
   }, [reloadKey]);
 
   // Modal open/close helpers
+  // Feedback modal open/close helpers
+  const openFeedbackModal = (rowIdx, round) => {
+    setFeedbackModal({ show: true, rowIdx, round });
+    setFeedbackText(data[rowIdx]?.[`${round}_feedback`] || '');
+    setFeedbackStatus(data[rowIdx]?.[`${round}_feedback_status`] || 'selected');
+  };
+  const closeFeedbackModal = () => {
+    setFeedbackModal({ show: false, rowIdx: null, round: null });
+    setFeedbackText('');
+    setFeedbackStatus('selected');
+  };
   const openModal = (rowIdx, round, mode = 'schedule') => {
     setModal({ show: true, rowIdx, round, mode });
     if (mode === 'schedule') {
@@ -65,30 +80,62 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
   };
 
 
-  // Manager assignment handler (uses POST to /interviews/managers)
+
+  // Manager options for dropdown
   const managerOptions = [
-    { value: 'manager_raj', label: 'Raj Kumar' },
-    { value: 'manager_sneha', label: 'Sneha Kapoor' },
-    { value: 'manager_arjun', label: 'Arjun Verma' }
+    { value: 'Raj Kumar', label: 'Raj Kumar' },
+    { value: 'Sneha Kapoor', label: 'Sneha Kapoor' },
+    { value: 'Arjun Verma', label: 'Arjun Verma' }
   ];
 
   // Save the manager value directly to the db for the candidate (PATCH)
-  const handleManagerChange = async (index, value) => {
-    const row = data[index];
+  const handleManagerChange = async (rowIdx, value, round) => {
+    const row = data[rowIdx];
+    // Format modalDate to 'YYYY-MM-DD HH:MM'
+    let formattedDatetime = modalDate ? modalDate.replace('T', ' ') : '';
+    let patchBody = {
+      candidate_id: row.candid,
+      round_type: round ? round.toUpperCase() : 'L1',
+      interview_datetime: formattedDatetime
+    };
+    if (round === 'l1') patchBody.l1_panel = value;
+    else if (round === 'l2') patchBody.l2_panel = value;
+    else if (round === 'hr') patchBody.hr_panel = value;
+    console.log('PATCH body for manager assignment:', patchBody);
     try {
-      const response = await fetch(`http://localhost:5000/interviews/assign-manager?candidate_id=${row.candid}&manager=${value}`, {
-        method: 'PATCH'
+      const response = await fetch('http://localhost:5000/interviews/interview-schedule', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(patchBody)
       });
-      const result = await response.json();
-      if (result.success) {
-        setData(prev => prev.map((r, i) => i === index ? { ...r, manager: value } : r));
-      } else {
-        alert('Failed to assign manager: ' + result.message);
+      const text = await response.text();
+      let result;
+      try {
+        result = JSON.parse(text);
+      } catch (e) {
+        result = { success: false, message: 'Invalid JSON response', raw: text };
       }
+      console.log('PATCH response for manager assignment:', result);
+    if (result.success) {
+      // Update local state for manager and interview date
+      setData(prev => prev.map((r, i) => {
+        if (i !== rowIdx) return r;
+        let updated = { ...r, manager: value };
+        if (round === 'l1') updated.l1_datetime = formattedDatetime;
+        else if (round === 'l2') updated.l2_datetime = formattedDatetime;
+        else if (round === 'hr') updated.hr_datetime = formattedDatetime;
+        return updated;
+      }));
+      // Force modal dropdown to show latest manager
+      setModal(m => ({ ...m }));
+    } else {
+      alert('Failed to assign manager: ' + result.message);
+    }
     } catch (err) {
       alert('Failed to assign manager: ' + err.message);
     }
   };
+
 
   // Reject candidate handler
   const handleRejectCandidate = async (candid, index) => {
@@ -126,7 +173,7 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
   const getTabClass = (status, datetime) => {
     if (!datetime) return 'btn-outline-secondary'; // default if not scheduled
     if (status === 'pending') return 'bg-warning text-dark';
-    if (status === 'accepted') return 'bg-success text-white';
+    if (status === 'accepted' || status === 'selected') return 'bg-success text-white';
     if (status === 'rejected') return 'bg-danger text-white';
     return 'bg-secondary text-white';
   };
@@ -149,8 +196,8 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
               <th>Job ID</th>
               <th>Candidate Name</th>
               <th>Interview Status</th>
-              <th>Assign Manager</th>
-              <th>Candidate Final Status</th>
+              <th>Feedback</th>
+              <th>Final Status</th>
             </tr>
           </thead>
           <tbody>
@@ -159,7 +206,7 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
                 <td>{row.candid}</td>
                 <td>{row.id}</td>
                 <td>{row.name}</td>
-                <td>
+                <td id="interview-status">
                   {/* Tabs for L1, L2, HR */}
                   <div className="d-flex gap-2 mb-2">
                     <button
@@ -194,15 +241,122 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
                     <div className="mb-1"><small>HR: {new Date(row.hr_datetime).toLocaleString()}</small></div>
                   )}
                 </td>
-                <td>
-                  {row.manager ? (
-                    <div className="text-success">
-                      <small>{row.manager}</small>
-                    </div>
-                  ) : (
-                    <span className="text-muted">No manager assigned</span>
+                
+                <td id="feedback">
+                  <div className="d-flex gap-2 mb-2">
+                    <button
+                      className={`btn btn-sm ${getTabClass(row.l1_feedback_status, row.l1_datetime)}`}
+                      onClick={() => openFeedbackModal(index, 'l1')}
+                      disabled={
+                        !row.l1_datetime ||
+                        row.l2_datetime // Disable L1 feedback if L2 interview is scheduled
+                      }
+                    >
+                      L1
+                    </button>
+                    <button
+                      className={`btn btn-sm ${getTabClass(row.l2_feedback_status, row.l2_datetime)}`}
+                      onClick={() => openFeedbackModal(index, 'l2')}
+                      disabled={
+                        row.l1_status !== 'accepted' ||
+                        !row.l2_datetime ||
+                        row.l2_status === 'rejected' // Only disable if rejected
+                      }
+                    >
+                      L2
+                    </button>
+                    <button
+                      className={`btn btn-sm ${getTabClass(row.hr_feedback_status, row.hr_datetime)}`}
+                      onClick={() => openFeedbackModal(index, 'hr')}
+                      disabled={row.l2_status !== 'accepted' || !row.hr_datetime}
+                    >
+                      HR
+                    </button>
+                  </div>
+      {/* Feedback Modal for L1/L2/HR feedback input */}
+      <Modal show={feedbackModal.show} onHide={closeFeedbackModal} centered>
+        <Modal.Header closeButton>
+          <Modal.Title>
+            {feedbackModal.round ? `${feedbackModal.round.toUpperCase()} Feedback` : 'Feedback'}
+          </Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <label className="form-label">Feedback</label>
+          <input
+            type="text"
+            className="form-control mb-2"
+            value={feedbackText}
+            onChange={e => setFeedbackText(e.target.value)}
+          />
+          <label className="form-label">Feedback Status</label>
+          <select
+            className="form-select mb-2"
+            value={feedbackStatus}
+            onChange={e => setFeedbackStatus(e.target.value)}
+          >
+            <option value="selected">Selected</option>
+            <option value="rejected">Rejected</option>
+          </select>
+          <Button
+            variant="primary"
+            className="mt-2"
+            disabled={!feedbackText.trim()}
+            onClick={async () => {
+              // Save feedback and status to backend (custom endpoint if needed)
+              const row = data[feedbackModal.rowIdx];
+              await fetch('http://localhost:5000/interviews/candidate-stage', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  candidate_id: row.candid,
+                  stage: feedbackModal.round ? feedbackModal.round.toUpperCase() : 'L1',
+                  feedback: feedbackText,
+                  status: feedbackStatus
+                })
+              });
+              setData(prev => prev.map((r, i) => {
+                if (i !== feedbackModal.rowIdx) return r;
+                let updated = {
+                  ...r,
+                  [`${feedbackModal.round}_feedback`]: feedbackText,
+                  [`${feedbackModal.round}_feedback_status`]: feedbackStatus
+                };
+                // If L1 feedback is rejected, also set l1_status to 'rejected'
+                if (feedbackModal.round === 'l1' && feedbackStatus === 'rejected') {
+                  updated.l1_status = 'rejected';
+                }
+                // If L1 feedback is selected, set l1_status to 'accepted'
+                if (feedbackModal.round === 'l1' && feedbackStatus === 'selected') {
+                  updated.l1_status = 'accepted';
+                }
+                // If L2 feedback is rejected, also set l2_status to 'rejected'
+                if (feedbackModal.round === 'l2' && feedbackStatus === 'rejected') {
+                  updated.l2_status = 'rejected';
+                }
+                // If L2 feedback is selected, set l2_status to 'accepted'
+                if (feedbackModal.round === 'l2' && feedbackStatus === 'selected') {
+                  updated.l2_status = 'accepted';
+                }
+                return updated;
+              }));
+              closeFeedbackModal();
+            }}
+          >Submit</Button>
+        </Modal.Body>
+      </Modal>
+                  {/* Show scheduled date/time for each round */}
+                  {row.l1_datetime && (
+                    <div className="mb-1"><small>L1: {new Date(row.l1_datetime).toLocaleString()}</small></div>
+                  )}
+                  {row.l2_datetime && (
+                    <div className="mb-1"><small>L2: {new Date(row.l2_datetime).toLocaleString()}</small></div>
+                  )}
+                  {row.hr_datetime && (
+                    <div className="mb-1"><small>HR: {new Date(row.hr_datetime).toLocaleString()}</small></div>
                   )}
                 </td>
+
+                {/* Feedback column: input for L1 feedback only, can be extended for L2/HR if needed */}
                 <td>
                   {/* Show Accept button only if all rounds are accepted */}
                   {row.l1_status === 'accepted' && row.l2_status === 'accepted' && row.hr_status === 'accepted' && (
@@ -242,25 +396,45 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
               value={modalDate}
               onChange={e => setModalDate(e.target.value)}
             />
+
             {/* Assign Manager dropdown inside modal */}
             <div className="mb-3">
-              <label className="form-label">Assign Manager</label>
+              <label className="form-label">Interviewer</label>
               <select
                 className="form-select"
-                value={data[modal.rowIdx]?.manager || ''}
-                onChange={e => setData(prev => prev.map((r, i) => i === modal.rowIdx ? { ...r, manager: e.target.value } : r))}
+                value={(() => {
+                  if (!modal.round || modal.rowIdx == null) return '';
+                  if (modal.round === 'l1') return data[modal.rowIdx]?.l1_panel || '';
+                  if (modal.round === 'l2') return data[modal.rowIdx]?.l2_panel || '';
+                  if (modal.round === 'hr') return data[modal.rowIdx]?.hr_panel || '';
+                  return '';
+                })()}
+                onChange={e => handleManagerChange(modal.rowIdx, e.target.value, modal.round)}
+                disabled={!modalDate}
               >
-                <option value="">Select Manager</option>
+                <option value="">Select Interviewer</option>
                 {managerOptions.map(opt => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
                 ))}
               </select>
-              {data[modal.rowIdx]?.manager && (
-                <div className="mt-2 text-success">
-                  <small>Selected: {data[modal.rowIdx].manager.replace('manager_', '').replace(/_/g, ' ')}</small>
-                </div>
+              {(() => {
+                if (!modal.round || modal.rowIdx == null) return null;
+                let interviewer = '';
+                if (modal.round === 'l1') interviewer = data[modal.rowIdx]?.l1_panel;
+                if (modal.round === 'l2') interviewer = data[modal.rowIdx]?.l2_panel;
+                if (modal.round === 'hr') interviewer = data[modal.rowIdx]?.hr_panel;
+                return interviewer ? (
+                  <div className="mt-2 text-success">
+                    <small>Selected: {interviewer.replace('manager_', '').replace(/_/g, ' ')}</small>
+                  </div>
+                ) : null;
+              })()}
+              {/* Show warning if interview not scheduled */}
+              {!modalDate && (
+                <div className="mt-2 text-danger"><small>Select interview date before assigning interviewer.</small></div>
               )}
             </div>
+
             {/* Generate Meet Link field and button side by side */}
             <div className="mb-3 d-flex align-items-center gap-2">
               <input
@@ -290,17 +464,7 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
                 }}
               >Generate Meet Link</Button>
             </div>
-            {/* Feedback input for the round, just below meet link */}
-            <div className="mb-3">
-              <label className="form-label">Feedback</label>
-              <textarea
-                className="form-control"
-                value={modalFeedback}
-                onChange={e => setModalFeedback(e.target.value)}
-                placeholder={`Enter feedback for ${modal.round ? modal.round.toUpperCase() : ''}`}
-                rows={2}
-              />
-            </div>
+      {/* Feedback input removed from modal, now in table column */}
             {/* Action buttons row */}
             <div className="d-flex gap-2 mb-3 justify-content-between">
               <div>
@@ -316,10 +480,7 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
                       round_type: modal.round ? modal.round.toUpperCase() : 'L1',
                       feedback: modalFeedback
                     };
-                    // Map manager to correct panel field
-                    if (modal.round === 'l1') patchBody.l1_panel = row.manager;
-                    else if (modal.round === 'l2') patchBody.l2_panel = row.manager;
-                    else if (modal.round === 'hr') patchBody.hr_panel = row.manager;
+                    // No manager assignment logic
                     const response = await fetch('http://localhost:5000/interviews/interview-schedule', {
                       method: 'PATCH',
                       headers: { 'Content-Type': 'application/json' },
@@ -350,7 +511,6 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
                       reset: true
                     };
                     if (modal.round === 'l1') {
-                      patchBody.manager = '';
                       patchBody.interview_link = '';
                     }
                     const response = await fetch('http://localhost:5000/interviews/interview-schedule', {
@@ -398,7 +558,7 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
                             [feedbackField]: modalFeedback
                           })
                         });
-                        // 2. Accept the round
+                        // 2. Accept the round 
                         const response = await fetch('http://localhost:5000/interviews/candidate-stage', {
                           method: 'POST',
                           headers: { 'Content-Type': 'application/json' },
@@ -412,14 +572,13 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
                         const result = await response.json();
                         if (result.success) {
                           // 3. If L1, reset assign manager, meet link, and feedback fields in UI for this candidate
-                          if (modal.round === 'l1') {
-                            setData(prev => prev.map((r, i) => i === modal.rowIdx ? {
-                              ...r,
-                              manager: '',
-                              interview_link: '',
-                              // Optionally clear feedback field in UI too
-                            } : r));
-                          }
+                        if (modal.round === 'l1') {
+                          setData(prev => prev.map((r, i) => i === modal.rowIdx ? {
+                            ...r,
+                            interview_link: '',
+                            // Optionally clear feedback field in UI too
+                          } : r));
+                        }
                           setModalFeedback('');
                           fetchCandidates();
                           closeModal();

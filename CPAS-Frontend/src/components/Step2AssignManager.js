@@ -9,6 +9,108 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
   const [feedbackText, setFeedbackText] = useState('');
   const [feedbackStatus, setFeedbackStatus] = useState('selected');
   const navigate = useNavigate();
+
+  // JD Modal state and functions
+  const [jdModal, setJDModal] = useState({ show: false, rowIdx: null });
+  const [jdRatings, setJdRatings] = useState({
+    experience: 0,
+    skillset: 0,
+    communication: 0,
+    interview: 0,
+    aptitude: 0,
+    decision: null
+  });
+
+  const openJDModal = (rowIdx) => {
+    setJDModal({ show: true, rowIdx });
+  };
+
+  const closeJDModal = () => {
+    setJDModal({ show: false, rowIdx: null });
+    setJdRatings({
+      experience: 0,
+      skillset: 0,
+      communication: 0,
+      interview: 0,
+      aptitude: 0,
+      decision: null
+    });
+  };
+
+  const handleStarRating = (criteria, value) => {
+    setJdRatings(prev => ({
+      ...prev,
+      [criteria]: value
+    }));
+  };
+
+  const calculateAverage = () => {
+    const total =
+      jdRatings.experience +
+      jdRatings.skillset +
+      jdRatings.communication +
+      jdRatings.interview +
+      jdRatings.aptitude;
+    return (total / 5).toFixed(2);
+  };
+
+  const renderStars = (criteria) => {
+    const value = jdRatings[criteria];
+    return (
+      <div>
+        {[1, 2, 3, 4, 5].map(num => (
+          <span
+            key={num}
+            className={`star ${num <= value ? 'filled' : ''}`}
+            onClick={() => handleStarRating(criteria, num)}
+            style={{ cursor: 'pointer', color: num <= value ? '#ffc107' : '#e4e5e9', fontSize: '24px' }}
+          >★</span>
+        ))}
+      </div>
+    );
+  };
+
+  const handleJDSubmit = async () => {
+    const row = data[jdModal.rowIdx];
+    if (!row) return closeJDModal();
+    
+    const avgScore = parseFloat(calculateAverage());
+    const decision = jdRatings.decision;
+    const feedback = `JD Evaluation: Avg Score ${avgScore}`;
+    
+    try {
+      const response = await fetch('http://localhost:5000/interviews/candidate-stage', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          candidate_id: row.candid,
+          stage: 'JD',
+          status: decision,
+          final_average_score: avgScore,
+          feedback
+        })
+      });
+      const result = await response.json();
+      if (result.success) {
+        // Update the local state to show the Accept button
+        setData(prev => prev.map((r, i) => {
+          if (i !== jdModal.rowIdx) return r;
+          return {
+            ...r,
+            jd_evaluation_completed: true,
+            jd_score: avgScore,
+            jd_status: decision
+          };
+        }));
+        alert('JD evaluation submitted successfully!');
+        closeJDModal();
+      } else {
+        alert('Failed to submit JD evaluation: ' + result.message);
+      }
+    } catch (err) {
+      alert('Failed to submit JD evaluation: ' + err.message);
+    }
+  };
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   // Modal state
@@ -364,6 +466,14 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
                 if (feedbackModal.round === 'l2' && feedbackStatus === 'selected') {
                   updated.l2_status = 'accepted';
                 }
+                // If HR feedback is selected, set hr_status to 'accepted'
+                if (feedbackModal.round === 'hr' && feedbackStatus === 'selected') {
+                  updated.hr_status = 'accepted';
+                }
+                // If HR feedback is rejected, set hr_status to 'rejected'
+                if (feedbackModal.round === 'hr' && feedbackStatus === 'rejected') {
+                  updated.hr_status = 'rejected';
+                }
                 return updated;
               }));
               closeFeedbackModal();
@@ -376,10 +486,22 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
 
                 {/* Feedback column: input for L1 feedback only, can be extended for L2/HR if needed */}
                 <td>
-                  {/* Show Accept button only if all rounds have selected feedback */}
+                  {/* Show JD button only after all interview rounds are completed with selected status */}
                   {row.l1_feedback_status === 'selected' && 
                    row.l2_feedback_status === 'selected' && 
-                   row.hr_feedback_status === 'selected' && (
+                   row.hr_feedback_status === 'selected' && !row.jd_evaluation_completed && (
+                    <button
+                      className="btn btn-outline-primary me-2"
+                      onClick={() => openJDModal(index)}
+                    >
+                      JD Evaluation
+                    </button>
+                  )}
+                  {/* Show Accept button only if all rounds have selected feedback and JD evaluation is completed */}
+                  {row.l1_feedback_status === 'selected' && 
+                   row.l2_feedback_status === 'selected' && 
+                   row.hr_feedback_status === 'selected' && 
+                   row.jd_evaluation_completed && (
                     <button
                       className="btn btn-outline-success me-2"
                       onClick={() => handleAcceptCandidate(row.candid, index)}
@@ -801,12 +923,13 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
             </div>
 
             <div className="d-flex gap-2 mb-3">
-              <Button
-                variant="primary"
-                onClick={async () => {
-                  const row = data[l2Modal.rowIdx];
-                  const formattedDatetime = modalDate.replace('T', ' ');
-                  const response = await fetch('http://localhost:5000/interviews/interview-schedule', {
+              <div>
+                <Button
+                  variant="primary"
+                  onClick={async () => {
+                    const row = data[l2Modal.rowIdx];
+                    const formattedDatetime = modalDate.replace('T', ' ');
+                    const response = await fetch('http://localhost:5000/interviews/interview-schedule', {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -838,12 +961,64 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
               >
                 Save
               </Button>
-              <Button
-                variant="secondary"
-                onClick={() => setL2Modal({ show: false, rowIdx: null })}
-              >
-                Cancel
-              </Button>
+                <Button
+                  variant="danger"
+                  onClick={async () => {
+                    const row = data[l2Modal.rowIdx];
+                    // Only reset L2 specific fields while preserving L1 state
+                    let patchBody = {
+                      candidate_id: row.candid,
+                      interview_datetime: null,
+                      round_type: 'L2',
+                      reset: true,
+                      // Maintain L1's existing state
+                      l1_status: row.l1_status,
+                      l1_feedback: row.l1_feedback,
+                      l1_feedback_status: row.l1_feedback_status,
+                      // Only reset L2 fields
+                      l2_datetime: null,
+                      l2_panel: '',
+                      // Keep L2 in pending if L1 was selected
+                      l2_status: row.l1_feedback_status === 'selected' ? 'pending' : null,
+                      l2_feedback: '',
+                      l2_feedback_status: null,
+                      interview_link: ''
+                    };
+                    const response = await fetch('http://localhost:5000/interviews/interview-schedule', {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(patchBody)
+                    });
+                    const result = await response.json();
+                    if (result.success) {
+                      setModalDate('');
+                      setData(prev => prev.map((r, i) => {
+                        if (i !== l2Modal.rowIdx) return r;
+                        return {
+                          ...r,
+                          // Explicitly maintain L1 state
+                          l1_status: r.l1_status,
+                          l1_feedback: r.l1_feedback,
+                          l1_feedback_status: r.l1_feedback_status,
+                          l1_panel: r.l1_panel,
+                          l1_datetime: r.l1_datetime,
+                          // Reset only L2 fields
+                          l2_datetime: null,
+                          l2_panel: '',
+                          l2_status: r.l1_feedback_status === 'selected' ? 'pending' : null,
+                          interview_link: ''
+                        };
+                      }));
+                      await fetchCandidates();
+                      setL2Modal({ show: false, rowIdx: null });
+                    } else {
+                      alert('Failed to reset: ' + result.message);
+                    }
+                  }}
+                >
+                  Reset
+                </Button>
+              </div>
             </div>
           </div>
         </Modal.Body>
@@ -946,12 +1121,13 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
             </div>
 
             <div className="d-flex gap-2 mb-3">
-              <Button
-                variant="primary"
-                onClick={async () => {
-                  const row = data[hrModal.rowIdx];
-                  const formattedDatetime = modalDate.replace('T', ' ');
-                  const response = await fetch('http://localhost:5000/interviews/interview-schedule', {
+              <div>
+                <Button
+                  variant="primary"
+                  onClick={async () => {
+                    const row = data[hrModal.rowIdx];
+                    const formattedDatetime = modalDate.replace('T', ' ');
+                    const response = await fetch('http://localhost:5000/interviews/interview-schedule', {
                     method: 'PATCH',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -983,15 +1159,105 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
               >
                 Save
               </Button>
-              <Button
-                variant="secondary"
-                onClick={() => setHRModal({ show: false, rowIdx: null })}
-              >
-                Cancel
-              </Button>
+                <Button
+                  variant="danger"
+                  onClick={async () => {
+                    const row = data[hrModal.rowIdx];
+                    let patchBody = {
+                      candidate_id: row.candid,
+                      interview_datetime: null,
+                      round_type: 'HR',
+                      reset: true,
+                      hr_status: null,
+                      hr_feedback: '',
+                      hr_feedback_status: null,
+                      hr_panel: ''
+                    };
+                    const response = await fetch('http://localhost:5000/interviews/interview-schedule', {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify(patchBody)
+                    });
+                    const result = await response.json();
+                    if (result.success) {
+                      setModalDate('');
+                      setData(prev => prev.map((r, i) => {
+                        if (i !== hrModal.rowIdx) return r;
+                        return {
+                          ...r,
+                          hr_datetime: null,
+                          hr_status: null,
+                          hr_feedback: '',
+                          hr_feedback_status: null,
+                          hr_panel: '',
+                          interview_link: ''
+                        };
+                      }));
+                      await fetchCandidates();
+                      setHRModal({ show: false, rowIdx: null });
+                    } else {
+                      alert('Failed to reset: ' + result.message);
+                    }
+                  }}
+                >
+                  Reset
+                </Button>
+              </div>
             </div>
           </div>
         </Modal.Body>
+      </Modal>
+
+      {/* JD Evaluation Modal */}
+      <Modal show={jdModal.show} onHide={closeJDModal} centered size="lg">
+        <Modal.Header closeButton>
+          <Modal.Title>JD Evaluation</Modal.Title>
+        </Modal.Header>
+        <Modal.Body>
+          <div>
+            <div className="mb-3">
+              <label className="form-label">Relevant Years of Experience</label>
+              {renderStars('experience')}
+            </div>
+            <div className="mb-3">
+              <label className="form-label">Techstack / Skillset</label>
+              {renderStars('skillset')}
+            </div>
+            <div className="mb-3">
+              <label className="form-label">Communication Skills</label>
+              {renderStars('communication')}
+            </div>
+            <div className="mb-3">
+              <label className="form-label">Interview</label>
+              {renderStars('interview')}
+            </div>
+            <div className="mb-3">
+              <label className="form-label">Aptitude</label>
+              {renderStars('aptitude')}
+            </div>
+            <div className="mb-3">
+              <strong>Average Score: {calculateAverage()} / 5</strong>
+            </div>
+            <div className="mb-3">
+              <label className="form-label">Final Decision:</label>
+              <select
+                className="form-select"
+                value={jdRatings.decision || ''}
+                onChange={(e) =>
+                  setJdRatings({ ...jdRatings, decision: e.target.value })
+                }
+              >
+                <option value="">Select</option>
+                <option value="Selected">Selected</option>
+                <option value="Rejected">Rejected</option>
+              </select>
+            </div>
+          </div>
+        </Modal.Body>
+        <Modal.Footer>
+          <Button variant="primary" onClick={handleJDSubmit} disabled={!jdRatings.decision}>Submit</Button>
+          <Button variant="secondary" onClick={closeJDModal}>Close</Button>
+        </Modal.Footer>
       </Modal>
 
       <div className="d-flex justify-content-end mt-4">
@@ -1026,5 +1292,4 @@ export default function Step2AssignManager({ onNext, onPrev, reloadKey }) {
       </div>
     </div>
   );
-  // ...existing code...
 }

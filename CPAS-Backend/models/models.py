@@ -11,6 +11,7 @@ class Employee(db.Model):
     reporting_manager_id = db.Column(db.Integer, nullable=False, default=0)
     last_working_day = db.Column(db.DateTime, nullable=True)
     password = db.Column(db.String, nullable=False)
+    # manager feedback
     security_key = db.Column(db.String, nullable=False)
     full_name = db.Column(db.String, nullable=False)
     is_admin = db.Column(db.Integer, nullable=False, default=0)

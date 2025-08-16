@@ -3,8 +3,10 @@
 # import datetime
 # import uuid
 
-from flask import jsonify
+from flask import jsonify, session, request
 import csv
+from functools import wraps
+from models.models import Employee
 
 
 def read_csv_data(file_path):
@@ -26,6 +28,55 @@ def read_csv_data(file_path):
 def generic_json_response(success = True, status_code = 200, message ='', data=[], error=[]):
     response_body = {'success':  success, 'status_code' : status_code, 'message' : message, 'data' : data, 'error' : error }
     return jsonify(response_body), status_code
+
+def simple_login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if "id_user" not in session:
+            return generic_json_response(
+                success=False,
+                status_code=401,
+                message="Unauthorized user"
+            )
+    return decorated_function
+
+
+
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if "id_user" not in session:
+            return generic_json_response(
+                success=False,
+                status_code=401,
+                message="Unauthorized user"
+            )
+  
+        user = Employee.query.get(session["id_user"])
+        if not user:
+            return generic_json_response(
+                success=False,
+                status_code=401,
+                message="User not found"
+            )
+
+        # allow GET for everyone logged in
+        if request.method == "GET":
+            return f(*args, **kwargs)
+
+        # allow POST only if HR
+        if (request.method == "POST" or request.method == "PATCH" or request.method == "DELETE" ) and user.is_hr:
+            return f(*args, **kwargs)
+
+        return generic_json_response(
+            success=False,
+            status_code=403,  # forbidden
+            message="Access denied. Only HR can perform this action."
+        )
+
+    return decorated_function
+
+
 
 
 

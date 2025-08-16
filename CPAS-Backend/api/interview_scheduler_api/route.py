@@ -1,17 +1,54 @@
-from flask import Blueprint, request
+from flask import Blueprint, request, session, jsonify
 from flask_cors import cross_origin
-from utility import read_csv_data, generic_json_response
+from utility import read_csv_data, generic_json_response, login_required, simple_login_required
 from models.models import Employee, Candidate, db
 from datetime import datetime
 import secrets
 import string
-from flask import jsonify
 
 
 interview_bp = Blueprint('api', __name__, url_prefix="/interviews")
 
+@interview_bp.route("/login", methods=["POST"])
+def login():
+    try:
+        session.clear()  # clear any previous session before setting new one
+        data = request.get_json()
+        email = data.get("email")
+        password = data.get("password")
+
+        user = Employee.query.filter_by(email=email, password=password).first()
+
+        if user:
+            session["id_user"] = user.id_user
+            session["email"] = user.email
+            return generic_json_response(
+                success = True,
+                status_code = 200,
+                message = "User Login successfull."
+            )
+        
+        else:
+            return generic_json_response(
+                success = False,
+                status_code = 404,
+                message = "Invalid credential."
+            )
+        
+    except Exception as err:
+        session.clear()  # clear any previous session before setting new one
+        return generic_json_response(
+            success = False,
+            status_code = 500,
+            message = "Internal server error.",
+            error = str(err)
+        )
+
+
+
 
 @interview_bp.route('/fetch-data-from-sheet',methods=['POST'])
+@login_required
 def fetch_data_from_sheet():
     try:
         candidate_data = read_csv_data("files/data.csv")
@@ -37,7 +74,6 @@ def fetch_data_from_sheet():
 
 
 @interview_bp.route('/candidate-stage-one', methods=['PATCH'])
-@cross_origin()
 def candidate_stage_one():
     try:
         data = request.get_json()
@@ -95,6 +131,7 @@ def get_candidates_stageone():
         )
     
 @interview_bp.route('/get-candidates', methods = ['GET'])
+@login_required
 def get_candidates():
     try:
         candidates = Candidate.query.filter((Candidate.stage_one_status == False) | (Candidate.stage_one_status == None)).order_by(Candidate.updated_on.desc()).all()
@@ -134,6 +171,7 @@ def get_candidates():
 
 
 @interview_bp.route('/assign-manager', methods=['PATCH'])
+@login_required
 def assign_manager():
     candidate_id = request.args.get('candidate_id')
     manager = request.args.get('manager')
@@ -149,10 +187,10 @@ def assign_manager():
 
 
 @interview_bp.route('/interview-schedule', methods=['PATCH'])
+@login_required
 def interview_schedule():
     try:
         data = request.get_json()
-
         candidate_id = data.get('candidate_id')
         interview_datetime_str = data.get('interview_datetime')
         round_type = data.get('round_type', None)
@@ -296,6 +334,7 @@ def interview_schedule():
 
 
 @interview_bp.route("/managers", methods=["GET", "POST"])
+@login_required
 def managers_config():
     '''
         API collection to get manager list and assign manager to candidate
@@ -383,6 +422,7 @@ def managers_config():
 
 
 @interview_bp.route("/candidate-reject" , methods = ["DELETE"] )
+@login_required
 def candidate_reject():
     try:
         candidate_id = request.args.get('candidate_id', None)
@@ -417,6 +457,7 @@ def candidate_reject():
 
 
 @interview_bp.route("/candidate-stage", methods=["GET", "POST"])
+@simple_login_required
 def candidate_stage_update():
     """
     GET: Fetch interview stage feedback/status for a candidate
@@ -425,21 +466,24 @@ def candidate_stage_update():
     try:
         if request.method == "POST":
             data = request.get_json()
-
+            
+            id_user = session.get("id_user", None)
             candidate_id = data.get("candidate_id", None)
             stage = data.get("stage", None)  # Expected values: "L1", L2", "HR", "JD"
             feedback = data.get("feedback", None)
             status = data.get("status", None)
             final_average_score = data.get("final_average_score" ,None)
 
-            # Validate required fields
-            if not candidate_id or not stage or not feedback or not status:
+            
+            # Find employee
+            employee = Employee.query.get(id_user)
+            if not employee:
                 return generic_json_response(
                     success=False,
-                    status_code=400,
-                    message="Missing required parameters."
+                    status_code=404,
+                    message="Employee not found."
                 )
-
+            
             # Find candidate
             candidate = Candidate.query.get(candidate_id)
             if not candidate:
@@ -451,6 +495,19 @@ def candidate_stage_update():
 
             # Update stage-wise data 
             # Enforce stage order and interview date presence
+
+            if (stage.upper() == "L1" or stage.upper() == "L2") and not employee.is_panel_member:
+                return generic_json_response(
+                        success=False, 
+                        status_code=400, 
+                        message="Employee is not a panel member. Only panel member can give this stage feedback.")
+            
+            if (stage.upper() == "HR" or stage.upper() == "JD") and not employee.is_hr:
+                return generic_json_response(
+                        success=False, 
+                        status_code=400, 
+                        message="Employee is not a HR. Only HR can add this stage feedback.")
+            
             if stage.upper() == "L1":
                 if not candidate.l1_date:
                     return generic_json_response(
@@ -524,7 +581,6 @@ def candidate_stage_update():
                 message="Feedback registered successfully."
             )
 
-
         if request.method == "GET":
             candidates = Candidate.query.filter(
             (Candidate.l1_date.isnot(None)) |
@@ -575,7 +631,8 @@ def candidate_stage_update():
             )
     
 
-@interview_bp.route("/candidate_documents_status" , methods = ["GET", "POST"])
+@interview_bp.route("/candidate-documents-status" , methods = ["GET", "POST"])
+@login_required
 def candidate_documents_update():
     try:
         if request.method == "POST":
@@ -589,7 +646,7 @@ def candidate_documents_update():
             additional_stages = data.get("additional_stages", None)
 
             # Validate required fields
-            if not candidate_id or not offer_letter_status or not bgv_status or not loi_status or not additional_stages:
+            if candidate_id is None or offer_letter_status is None or bgv_status is None or loi_status is None or additional_stages is None:
                 return generic_json_response(
                     success=False,
                     status_code=400,
@@ -669,7 +726,7 @@ def candidate_documents_update():
                 message="Internal server error",
                 error=str(err)
             )
-
+    
 
 JITSI_DOMAIN = "meet.jit.si"
 
@@ -678,6 +735,7 @@ def generate_unique_room_name(length=16):
     return ''.join(secrets.choice(characters) for _ in range(length))
 
 @interview_bp.route('/generate-meeting-link', methods=['POST'])
+@login_required
 def generate_meeting_link():
     data = request.get_json()
     candidate_id = data.get("candidate_id")
@@ -702,6 +760,7 @@ def generate_meeting_link():
     })
 
 @interview_bp.route("/complete-recruitment", methods=["POST"])
+@login_required
 def complete_recruitment():
     try:
         data = request.get_json()
@@ -738,7 +797,7 @@ def complete_recruitment():
             return generic_json_response(
                 success=False,
                 status_code=400,
-                message="All interview and document stages must be completed."
+                message="All interview and document stages must be completed before marking as recruited."
             )
 
         candidate.recruitment_completed = True
@@ -758,6 +817,47 @@ def complete_recruitment():
             message="Internal server error",
             error=str(err)
         )
+
+@interview_bp.route("/hired-candidates", methods=["GET"])
+@login_required
+def get_hired_candidates():
+    try:
+        # Query to fetch candidates who have been hired
+        hired_candidates = Candidate.query.filter_by(candidate_status="HIRED").all()
+
+        if not hired_candidates:
+            return generic_json_response(
+                success=False,
+                status_code=404,
+                message="No hired candidates found."
+            )
+
+        # Prepare the result data with candidate_id, candidate_name, job_id, and status
+        result = []
+        for candidate in hired_candidates:
+            result.append({
+                "candidate_id": candidate.candidate_id,
+                "candidate_name": candidate.candidate_name,
+                "job_id": candidate.job_id,
+                "status": candidate.candidate_status
+            })
+
+        # Return the list of hired candidates
+        return generic_json_response(
+            success=True,
+            status_code=200,
+            message="Hired candidates fetched successfully.",
+            data=result
+        )
+
+    except Exception as err:
+        return generic_json_response(
+            success=False,
+            status_code=500,
+            message="Internal server error",
+            error=str(err)
+        )
+
 
 
 

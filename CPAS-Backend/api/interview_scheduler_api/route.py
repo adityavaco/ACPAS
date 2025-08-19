@@ -1,6 +1,6 @@
 from flask import Blueprint, request, session, jsonify
 from flask_cors import cross_origin
-from utility import read_csv_data, generic_json_response, login_required, simple_login_required
+from utility import read_csv_data, generic_json_response, login_required, simple_login_required, update_sheet_with_row
 from models.models import Employee, Candidate, db
 from datetime import datetime
 import secrets
@@ -800,15 +800,66 @@ def complete_recruitment():
                 message="All interview and document stages must be completed before marking as recruited."
             )
 
+        
+        # updating google sheet
+        headers = [
+            "first_name",
+            "last_name",
+            "tentative_start_date",
+            "shift",
+            "location",
+            "employee_personal_email",
+            "employee_company_email",
+            "laptop_id",
+            "asset_tag",
+            "manager_vaco_id",
+            "manager_email",
+            "project_name",
+            "hr_poc",
+            "job_title"
+        ]
+
+        first_name = candidate.candidate_name.split(' ')[0] if candidate.candidate_name else ''
+        last_name = ' '.join(candidate.candidate_name.split(' ')[1:]) if candidate.candidate_name else ''
+
+        # Get manager email from Employee table (assuming relationship or query)
+        manager_email = candidate.manager.email if candidate.manager and candidate.manager.email else ''
+
+        
+        row_data = [
+            first_name,                  # first_name
+            last_name,                   # last_name
+            '',                         # tentative_start_date (empty)
+            '',                         # shift (empty)
+            '',                         # location (empty)
+            '',                         # employee_personal_email (empty)
+            '',                         # employee_company_email (empty)
+            '',                         # laptop_id (empty)
+            '',                         # asset_tag (empty)
+            candidate.manager_id or '',  # manager_vaco_id
+            manager_email,               # manager_email
+            '',                         # project_name (empty)
+            candidate.hr_id or '',       # hr_poc
+            candidate.job_role or ''     # job_title
+        ]
+
         candidate.recruitment_completed = True
         candidate.candidate_status = "HIRED"
         db.session.commit()
+        
+        try:
+            update_sheet_with_row(headers, row_data)
+
+        except Exception as err:
+            print("Cannot update csv error:", err)
+
 
         return generic_json_response(
             success=True,
             status_code=200,
             message="Candidate recruitment marked as completed."
         )
+
 
     except Exception as err:
         return generic_json_response(

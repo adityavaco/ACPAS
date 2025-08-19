@@ -2,10 +2,15 @@ from flask import Flask
 from api.interview_scheduler_api.route import interview_bp
 from models.models import Employee, Candidate, db
 from flask_cors import CORS
+from dotenv import load_dotenv
+import os 
+
+
+load_dotenv()
 
 app = Flask(__name__)
 
-app.secret_key = "4eb4b5aac929314a3922393f4110a9c6eb8b35d1612c8b4ad7f56a6600471f74"
+app.secret_key = os.getenv("SECRET_KEY")
 
 CORS(app, origins=["http://localhost:3000"], supports_credentials=True, allow_headers=["Content-Type", "Authorization"])
 
@@ -22,4 +27,4 @@ with app.app_context():
 
 
 if __name__ == "__main__":
-    app.run(debug = True)
+    app.run(debug=True)

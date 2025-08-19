@@ -4,9 +4,18 @@
 # import uuid
 
 from flask import jsonify, session, request
-import csv
+import csv , os
 from functools import wraps
 from models.models import Employee
+from google.oauth2 import service_account
+from googleapiclient.discovery import build
+
+SERVICE_ACCOUNT_FILE = os.getenv('SERVICE_ACCOUNT_FILE')
+SPREADSHEET_ID = os.getenv('SPREADSHEET_ID')
+SHEET_NAME = os.getenv('SHEET_NAME')
+
+
+
 
 
 def read_csv_data(file_path):
@@ -77,60 +86,39 @@ def login_required(f):
     return decorated_function
 
 
+def update_sheet_with_row(headers, new_row):
+    # Auth setup
+    scopes = ['https://www.googleapis.com/auth/spreadsheets']
+    credentials = service_account.Credentials.from_service_account_file(
+        SERVICE_ACCOUNT_FILE, scopes=scopes)
+    service = build('sheets', 'v4', credentials=credentials)
 
+    # Get existing headers
+    result = service.spreadsheets().values().get(
+        spreadsheetId=SPREADSHEET_ID,
+        range=f"{SHEET_NAME}!1:1"
+    ).execute()
+    existing_values = result.get('values', [])
+    current_headers = existing_values[0] if existing_values else []
 
+    # Set headers if missing
+    if not current_headers:
+        print("Headers missing, setting headers...")
+        service.spreadsheets().values().update(
+            spreadsheetId=SPREADSHEET_ID,
+            range=f"{SHEET_NAME}!1:1",
+            valueInputOption='RAW',
+            body={'values': [headers]}
+        ).execute()
+    else:
+        print(f"Headers found: {current_headers}")
 
-# class GoogleMeetScheduler:
-#     def __init__(self, service_account_file: str, calendar_id: str):
-#         self.service_account_file = service_account_file
-#         self.calendar_id = calendar_id
-#         self.scopes = ['https://www.googleapis.com/auth/calendar']
-#         self.credentials = service_account.Credentials.from_service_account_file(
-#             self.service_account_file, scopes=self.scopes)
-#         self.service = build('calendar', 'v3', credentials=self.credentials)
+    # Append the new row
+    service.spreadsheets().values().append(
+        spreadsheetId=SPREADSHEET_ID,
+        range=SHEET_NAME,
+        valueInputOption='RAW',
+        insertDataOption='INSERT_ROWS',
+        body={'values': [new_row]}
+    ).execute()
 
-#     def create_meeting(self, summary: str, description: str, start_datetime: str, end_datetime: str, attendee_email: str = None):
-#         """
-#         Create a Google Calendar event (no Meet link for personal Gmail).
-
-#         :param summary: Title of the event
-#         :param description: Event description
-#         :param start_datetime: Start in ISO format (e.g., '2025-07-30T15:00:00+05:30')
-#         :param end_datetime: End in ISO format (e.g., '2025-07-30T15:30:00+05:30')
-#         :param attendee_email: Optional participant email
-#         :return: Event link or ID
-#         """
-
-#         event = {
-#             'summary': summary,
-#             'description': description,
-#             'start': {
-#                 'dateTime': start_datetime,
-#                 'timeZone': 'Asia/Kolkata',
-#             },
-#             'end': {
-#                 'dateTime': end_datetime,
-#                 'timeZone': 'Asia/Kolkata',
-#             },
-#         }
-
-#         if attendee_email:
-#             event['attendees'] = [{'email': attendee_email}]
-
-#         created_event = self.service.events().insert(
-#             calendarId=self.calendar_id,
-#             body=event
-#         ).execute()
-
-#         return created_event.get('htmlLink')  # returns event view link
-
-
-# if __name__ == "__main__":
-#     scheduler = GoogleMeetScheduler('cpas-project-467504-0b6631d717dd.json', 'info2nitikadhalla@gmail.com')
-#     event_link = scheduler.create_meeting(
-#         summary='Interview with Candidate',
-#         description='Discussion on technical fit.',
-#         start_datetime='2025-07-30T15:00:00+05:30',
-#         end_datetime='2025-07-30T15:30:00+05:30',
-#     )
-#     print("Event Link:", event_link)
